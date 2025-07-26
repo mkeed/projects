@@ -68,7 +68,7 @@ fn tokenize_number(val: []const u8) ?struct { len: usize, num: NumberToken } {
                 offset += 1;
                 //
             }
-            return .{ .len = offset, .num = .{ .whole = val[0..whole_offset], .frac = val[whole_offset..offset] } };
+            return .{ .len = offset, .num = .{ .whole = val[0..whole_offset], .frac = val[whole_offset + 1 .. offset] } };
         } else {
             return .{ .len = offset, .num = .{ .whole = val[0..whole_offset], .frac = null } };
         }
@@ -89,7 +89,7 @@ fn tokenize_identifier(val: []const u8) ?struct { len: usize, val: []const u8 } 
     return null;
 }
 
-const iterator = struct {
+pub const iterator = struct {
     data: []const u8,
     idx: usize = 0,
     fn matchString(self: iterator, val: []const u8) bool {
@@ -132,14 +132,14 @@ const iterator = struct {
     }
 };
 
-fn tokenize(input: []const u8) !void {
+pub fn tokenize(input: []const u8, al: *std.ArrayList(Token)) !void {
     var iter = iterator{ .data = input };
     while (try iter.next()) |token| {
-        std.log.err("{f}", .{token});
+        try al.append(token);
     }
 }
 
 test {
-    try tokenize("1 + 2;");
-    try tokenize("const len = 1 + 2;");
+    _ = @import("Test.zig");
+    //try tokenize("const len = 1 + 2;");
 }
