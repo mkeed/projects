@@ -28,6 +28,7 @@ pub const AST = struct {
         action: Action,
         nodes: []const Node,
     };
+    pub fn deinit(_: AST) void {}
 };
 
 const Test = AST{
@@ -36,3 +37,12 @@ const Test = AST{
         .nodes = &.{},
     },
 };
+
+pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !AST {
+    for (tokens) |t| {
+        std.log.err("{f}", .{t});
+        //switch(t)
+    }
+    _ = alloc;
+    return error.TODO;
+}

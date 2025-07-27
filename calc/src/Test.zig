@@ -67,16 +67,20 @@ test {
     defer token_list.deinit();
     for (tcs) |tc| {
         token_list.clearRetainingCapacity();
-        try tokenize.tokenize(tc.input, &token_list);
-        errdefer {
-            for (tc.tokens, 0..) |i, idx| {
-                std.log.err("Expected[{}] => ({f})", .{ idx, i });
+        {
+            try tokenize.tokenize(tc.input, &token_list);
+            errdefer {
+                for (tc.tokens, 0..) |i, idx| {
+                    std.log.err("Expected[{}] => ({f})", .{ idx, i });
+                }
+                for (token_list.items, 0..) |i, idx| {
+                    std.log.err("Found[{}] => ({f})", .{ idx, i });
+                }
             }
-            for (token_list.items, 0..) |i, idx| {
-                std.log.err("Found[{}] => ({f})", .{ idx, i });
-            }
+            try std.testing.expectEqualDeep(tc.tokens, token_list.items);
         }
-        try std.testing.expectEqualDeep(tc.tokens, token_list.items);
+        const ast = try AST.gen_ast(token_list.items, std.testing.allocator);
+        defer ast.deinit();
         //
     }
 }
