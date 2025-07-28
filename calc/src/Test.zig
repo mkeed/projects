@@ -79,7 +79,8 @@ test {
             }
             try std.testing.expectEqualDeep(tc.tokens, token_list.items);
         }
-        const ast = try AST.gen_ast(token_list.items, std.testing.allocator);
+        var iter = tokenize.iterator{ .data = tc.input };
+        const ast = try AST.gen_ast(&iter, std.testing.allocator);
         defer ast.deinit();
         //
     }
