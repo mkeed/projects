@@ -1,5 +1,5 @@
 const std = @import("std");
-const Operator = enum { add, sub, div, mul, shl, shr };
+pub const Operator = enum { add, sub, div, mul, shl, shr };
 const Decl = enum { @"const", @"var", fun, @"struct", @"union" };
 const Syntax = enum { semiColon, equal };
 const NumberToken = struct {

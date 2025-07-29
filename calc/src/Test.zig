@@ -35,10 +35,11 @@ const tcs = [_]TestCase{
         },
     },
     .{
-        .input = "const len 1.123 + 2.321;",
+        .input = "const len = 1.123 + 2.321;",
         .tokens = &.{
             .{ .decl = .@"const" },
             .{ .identifier = "len" },
+            .{ .syntax = .equal },
             .{ .number = .{ .whole = "1", .frac = "123" } },
             .{ .operator = .add },
             .{ .number = .{ .whole = "2", .frac = "321" } },
@@ -82,6 +83,7 @@ test {
 
         const ast = try AST.gen_ast(token_list.items, std.testing.allocator);
         defer ast.deinit();
+        std.log.err("{f}", .{ast});
         //
     }
 }
