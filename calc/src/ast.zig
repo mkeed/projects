@@ -38,8 +38,10 @@ const Test = AST{
     },
 };
 
-pub fn gen_ast(tokens: *Token.iterator, alloc: std.mem.Allocator) !AST {
-    while (try tokens.next()) |t| {
+pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !AST {
+    var count: usize = 0;
+    while (count < tokens.len) : (count += 1) {
+        const t = tokens[count];
         switch (t) {
             .number => |n| {
                 std.log.err("{}", .{n});
