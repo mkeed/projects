@@ -1,6 +1,14 @@
 const std = @import("std");
-const VM = @import("VM.zig").VM;
 
-fn equate(eq: []const u8, vm: *VM) !Value {
-    //
+pub const Exec = struct {
+    pub fn deinit(self: Exec) void {
+        _ = self;
+    }
+};
+
+pub fn compile(eq: []const u8, alloc: std.mem.Allocator) !Exec {
+    _ = eq;
+    _ = alloc;
+
+    return error.TODO;
 }

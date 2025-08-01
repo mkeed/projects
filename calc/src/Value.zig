@@ -1,14 +1,11 @@
 const std = @import("std");
 
-pub const VarRef = struct {
+pub const StringRef = struct {
     idx: u32,
 };
 
-pub const Number = struct {
-    val: i64,
-};
-
 pub const Value = union(enum) {
-    number: Number,
-    variable: VarRef,
+    int: i64,
+    float: f64,
+    string: StringRef,
 };
