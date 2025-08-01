@@ -1,10 +1,17 @@
 const std = @import("std");
 pub const Operator = enum { add, sub, div, mul, shl, shr };
-const Decl = enum { @"const", @"var", fun, @"struct", @"union" };
-const Syntax = enum { semiColon, equal };
-const NumberToken = struct {
+pub const Decl = enum { @"const", @"var", fun, @"struct", @"union" };
+pub const Syntax = enum { semiColon, equal };
+pub const NumberToken = struct {
     whole: []const u8,
     frac: ?[]const u8,
+    pub fn format(self: NumberToken, writer: *std.Io.Writer) !void {
+        try writer.print("({s}", .{self.whole});
+        if (self.frac) |f| {
+            try writer.print(",{s}", .{f});
+        }
+        try writer.print(")", .{});
+    }
 };
 
 pub const Token = union(enum) {

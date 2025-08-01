@@ -32,10 +32,12 @@ pub const ASTGen = struct {
     };
     arena: std.heap.ArenaAllocator,
     nodes: std.ArrayList(Node),
+    parent: ?usize,
     pub fn init(alloc: std.mem.Allocator) ASTGen {
         return .{
             .arena = std.heap.ArenaAllocator.init(alloc),
             .nodes = std.ArrayList(Node).init(alloc),
+            .parent = null,
         };
     }
     pub fn addNode(self: *ASTGen, node: Node) !usize {
@@ -52,6 +54,9 @@ pub const ASTGen = struct {
         self.nodes.deinit();
     }
     pub fn format(self: ASTGen, writer: *std.Io.Writer) !void {
+        if (self.parent) |p| {
+            try writer.print("Parent:[{}]", .{p});
+        }
         for (self.nodes.items, 0..) |i, idx| {
             try writer.print("[{}]{}\n", .{ idx, i });
         }
@@ -80,51 +85,83 @@ const Iter = struct {
     }
 };
 
-pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
-    var iter = Iter{ .tokens = tokens };
-    var ast = ASTGen.init(alloc);
-    errdefer ast.deinit();
-    var parent: ?u64 = null;
-    while (iter.next()) |t| {
-        errdefer std.log.err("{f}", .{t});
-        switch (t) {
-            .number => |n| {
-                const node_id = try ast.addNode(.{
-                    .action = .{
-                        .constant = .{ .number = try std.fmt.parseInt(i64, n.whole, 0) },
-                    },
-                });
-                std.log.err("{}", .{n});
-                if (iter.next()) |p| {
-                    switch (p) {
-                        .operator => |o| {
-                            if (iter.next()) |pp| {
-                                switch (pp) {
-                                    .number => |nn| {
-                                        const nnode_id = try ast.addNode(.{
-                                            .action = .{
-                                                .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
-                                            },
-                                        });
-                                        var list = try ast.allocList(u64, 2);
-                                        list[0] = node_id;
-                                        list[1] = nnode_id;
-                                        parent = try ast.addNode(.{
-                                            .action = .{ .operation = o },
-                                            .childNodes = list,
-                                        });
-                                    },
-                                    else => {
-                                        return error.TODO;
-                                    },
-                                }
-                            }
+fn number(ast: *ASTGen, iter: *Iter, n: Token.NumberToken) !void {
+    const node_id = try ast.addNode(.{
+        .action = .{
+            .constant = .{ .number = try std.fmt.parseInt(i64, n.whole, 0) },
+        },
+    });
+    std.log.err("{f}", .{n});
+    if (iter.next()) |p| {
+        switch (p) {
+            .operator => |o| {
+                if (iter.next()) |pp| {
+                    switch (pp) {
+                        .number => |nn| {
+                            const nnode_id = try ast.addNode(.{
+                                .action = .{
+                                    .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
+                                },
+                            });
+                            var list = try ast.allocList(u64, 2);
+                            list[0] = node_id;
+                            list[1] = nnode_id;
+                            ast.parent = try ast.addNode(.{
+                                .action = .{ .operation = o },
+                                .childNodes = list,
+                            });
                         },
                         else => {
                             return error.TODO;
                         },
                     }
                 }
+            },
+            else => {
+                return error.TODO;
+            },
+        }
+    }
+}
+
+fn operator(ast: *ASTGen, iter: *Iter, t: Token.Operator) !void {
+    if (iter.next()) |n| {
+        switch (n) {
+            .number => |num| {
+                const parent = ast.parent orelse return error.ExpectedParent;
+                const nnode_id = try ast.addNode(.{
+                    .action = .{
+                        .constant = .{ .number = try std.fmt.parseInt(i64, num.whole, 0) },
+                    },
+                });
+                var list = try ast.allocList(u64, 2);
+                list[0] = parent;
+                list[1] = nnode_id;
+                ast.parent = try ast.addNode(.{
+                    .action = .{ .operation = t },
+                    .childNodes = list,
+                });
+            },
+            else => {
+                return error.UnexpectedSymbol;
+            },
+        }
+    } else {
+        return error.UnexpectedEnd;
+    }
+}
+
+pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
+    var iter = Iter{ .tokens = tokens };
+    var ast = ASTGen.init(alloc);
+    errdefer ast.deinit();
+    errdefer std.log.err("{f}", .{ast});
+    var parent: ?u64 = null;
+    while (iter.next()) |t| {
+        errdefer std.log.err("TODO {f}", .{t});
+        switch (t) {
+            .number => |n| {
+                try number(&ast, &iter, n);
             },
             .decl => |d| {
                 switch (d) {
@@ -164,6 +201,7 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
                     .equal => return error.TODO,
                 }
             },
+            .operator => |o| try operator(&ast, &iter, o),
             else => {
                 return error.TODO;
             },
