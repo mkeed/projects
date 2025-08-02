@@ -11,6 +11,6 @@ pub fn main() !void {
     defer vm.deinit();
     try vm.set("thing", .{ .int = 123 });
 
-    const val = try vm.exec("1 + 1 + 2");
+    const val = try vm.exec("1 + 1 + 2 + 3 + 4 + 4");
     std.log.err("{}", .{val});
 }

@@ -1,5 +1,7 @@
 const std = @import("std");
 const Token = @import("tokenize.zig");
+const Value = @import("Value.zig").Value;
+const VM = @import("VM.zig").VM;
 
 pub const Constant = union(enum) {
     number: i64,
@@ -14,15 +16,6 @@ pub const Action = union(enum) {
     constant: Constant,
     variable: Variable,
     operation: Token.Operator,
-};
-
-pub const AST = struct {
-    parent: Node,
-    pub const Node = struct {
-        action: Action,
-        nodes: []const Node,
-    };
-    pub fn deinit(_: AST) void {}
 };
 
 pub const ASTGen = struct {
@@ -61,13 +54,53 @@ pub const ASTGen = struct {
             try writer.print("[{}]{}\n", .{ idx, i });
         }
     }
-};
+    pub fn toGraphViz(self: ASTGen, writer: anytype) !void {
+        try writer.print("digraph mygraph {{", .{});
+        for (self.nodes.items, 0..) |item, idx| {
+            if (item.childNodes) |children| {
+                for (children) |c| {
+                    try writer.print("node_{} -> node_{}\n", .{ idx, c });
+                }
+            }
+        }
+        try writer.print("}}", .{});
+    }
+    pub const Result = struct {
+        value: Value,
+    };
+    pub fn walk(self: ASTGen, vm: *VM, node: usize) !Result {
+        switch (self.nodes.items[node].action) {
+            .constant => |c| return .{ .value = .{ .int = c.number } },
+            .variable => |v| return .{
+                .value = vm.get(v.name) orelse return error.InvalidVar,
+            },
+            .operation => |o| {
+                const children = self.nodes.items[node].childNodes orelse return error.NeedChildren;
+                if (children.len != 2) return error.ExpectedTwoChildren;
+                const val1 = switch ((try self.walk(vm, children[0])).value) {
+                    .int => |i| i,
+                    else => return error.TODO,
+                };
+                const val2 = switch ((try self.walk(vm, children[1])).value) {
+                    .int => |i| i,
+                    else => return error.TODO,
+                };
 
-const Test = AST{
-    .parent = .{
-        .action = .{ .operation = .add },
-        .nodes = &.{},
-    },
+                return .{
+                    .value = .{
+                        .int = switch (o) {
+                            .add => val1 + val2,
+                            .sub => val1 - val2,
+                            .div => @divTrunc(val1, val2),
+                            .mul => val1 * val2,
+                            .shl => val1 << @intCast(val2),
+                            .shr => val1 >> @intCast(val2),
+                        },
+                    },
+                };
+            },
+        }
+    }
 };
 
 const Iter = struct {
