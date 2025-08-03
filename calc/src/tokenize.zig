@@ -1,7 +1,10 @@
 const std = @import("std");
 pub const Operator = enum { add, sub, div, mul, shl, shr };
 pub const Decl = enum { @"const", @"var", fun, @"struct", @"union" };
-pub const Syntax = enum { semiColon, equal };
+pub const Syntax = enum {
+    semiColon,
+    equal, //openParen, closeParen, comma
+};
 pub const NumberToken = struct {
     whole: []const u8,
     frac: ?[]const u8,

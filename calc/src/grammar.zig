@@ -40,12 +40,4 @@ const utility_rules =
     \\function       → IDENTIFIER "(" parameters? ")" block ;
     \\parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
     \\arguments      → expression ( "," expression )* ;
-    \\
-    \\NUMBER         → DIGIT+ ( "." DIGIT+ )? ;
-    \\STRING         → "\"" <any char except "\"">* "\"" ;
-    \\IDENTIFIER     → ALPHA ( ALPHA | DIGIT )* ;
-    \\ALPHA          → "a" ... "z" | "A" ... "Z" | "_" ;
-    \\DIGIT          → "0" ... "9" ;
 ;
-
-fn digit() void {}

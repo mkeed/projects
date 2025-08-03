@@ -50,6 +50,12 @@ pub const ReadLine = struct {
         self.history.deinit();
     }
     pub fn read(self: *ReadLine, output: *std.ArrayList(u8)) !void {
+        const orig = try std.posix.tcgetattr(self.stdin.handle);
+        defer {
+            std.posix.tcsetattr(self.stdin.handle, .FLUSH, orig) catch {};
+        }
+        var new = orig;
+        //new.iflag
         _ = try self.stdout.write(self.prompt);
         var buf: [512]u8 = undefined;
 
