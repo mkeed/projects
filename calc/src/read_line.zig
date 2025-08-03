@@ -50,17 +50,41 @@ pub const ReadLine = struct {
         self.history.deinit();
     }
     pub fn read(self: *ReadLine, output: *std.ArrayList(u8)) !void {
-        const orig = try std.posix.tcgetattr(self.stdin.handle);
-        defer {
-            std.posix.tcsetattr(self.stdin.handle, .FLUSH, orig) catch {};
-        }
-        var new = orig;
-        //new.iflag
-        _ = try self.stdout.write(self.prompt);
-        var buf: [512]u8 = undefined;
+        const orig = try enable_raw_mode(self.stdin.handle);
 
-        const len = try self.stdin.read(&buf);
-        try output.appendSlice(buf[0..len]);
+        defer std.posix.tcsetattr(self.stdin.handle, .FLUSH, orig) catch {};
+        while (true) {
+            _ = try self.stdout.write(self.prompt);
+            var buf: [512]u8 = undefined;
+
+            const len = try self.stdin.read(&buf);
+            try output.appendSlice(buf[0..len]);
+        }
         //
     }
 };
+
+fn enable_raw_mode(fd: std.posix.fd_t) !std.posix.termios {
+    const orig = try std.posix.tcgetattr(fd);
+    var new = orig;
+
+    new.iflag.BRKINT = false;
+    new.iflag.ICRNL = false;
+    new.iflag.INPCK = false;
+    new.iflag.ISTRIP = false;
+    new.iflag.IXON = false;
+
+    new.oflag.OPOST = false;
+
+    new.cflag.CSIZE = .CS8;
+
+    new.lflag.ECHO = false;
+    new.lflag.ICANON = false;
+    new.lflag.IEXTEN = false;
+    new.lflag.ISIG = false;
+    const VMIN = 6;
+
+    new.cc[VMIN] = 1;
+    try std.posix.tcsetattr(fd, .FLUSH, new);
+    return orig;
+}
