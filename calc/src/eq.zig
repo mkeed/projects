@@ -2,14 +2,16 @@ const std = @import("std");
 const ast = @import("ast.zig");
 const tokenize = @import("tokenize.zig");
 const VM = @import("VM.zig").VM;
+const Value = @import("Value.zig").Value;
 
 pub const Exec = struct {
+    value: Value,
     pub fn deinit(self: Exec) void {
         _ = self;
     }
 };
 
-pub fn compile(eq: []const u8, alloc: std.mem.Allocator) !Exec {
+pub fn compile(eq: []const u8, vm: *VM, alloc: std.mem.Allocator) !Exec {
     var tokens = std.ArrayList(tokenize.Token).init(alloc);
     defer tokens.deinit();
     try tokenize.tokenize(eq, &tokens);
@@ -19,9 +21,8 @@ pub fn compile(eq: []const u8, alloc: std.mem.Allocator) !Exec {
     const file = try std.fs.cwd().createFile("Nodes.dot", .{ .truncate = true });
     defer file.close();
     try tree.toGraphViz(file.deprecatedWriter());
-    var vm = VM.init(alloc);
-    defer vm.deinit();
-    const value = try tree.walk(&vm, tree.parent orelse return error.BadParent);
+
+    const value = try tree.walk(vm, tree.parent orelse return error.BadParent);
     std.log.err("{}", .{value});
-    return error.TODO;
+    return .{ .value = value.value };
 }

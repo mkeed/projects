@@ -9,13 +9,25 @@ pub const Constant = union(enum) {
 
 pub const Variable = struct {
     name: []const u8,
-    constant: bool,
 };
 
 pub const Action = union(enum) {
     constant: Constant,
     variable: Variable,
     operation: Token.Operator,
+    pub fn format(self: Action, writer: anytype) !void {
+        switch (self) {
+            .constant => |c| {
+                try writer.print("(Constant:{})", .{c.number});
+            },
+            .variable => |v| {
+                try writer.print("(Var:{s})", .{v.name});
+            },
+            .operation => |o| {
+                try writer.print("({})", .{o});
+            },
+        }
+    }
 };
 
 pub const ASTGen = struct {
@@ -56,6 +68,9 @@ pub const ASTGen = struct {
     }
     pub fn toGraphViz(self: ASTGen, writer: anytype) !void {
         try writer.print("digraph mygraph {{", .{});
+        for (self.nodes.items, 0..) |item, idx| {
+            try writer.print("node_{}  [label = \"{f}\"]", .{ idx, item.action });
+        }
         for (self.nodes.items, 0..) |item, idx| {
             if (item.childNodes) |children| {
                 for (children) |c| {
@@ -129,25 +144,28 @@ fn number(ast: *ASTGen, iter: *Iter, n: Token.NumberToken) !void {
         switch (p) {
             .operator => |o| {
                 if (iter.next()) |pp| {
-                    switch (pp) {
-                        .number => |nn| {
-                            const nnode_id = try ast.addNode(.{
-                                .action = .{
-                                    .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
-                                },
-                            });
-                            var list = try ast.allocList(u64, 2);
-                            list[0] = node_id;
-                            list[1] = nnode_id;
-                            ast.parent = try ast.addNode(.{
-                                .action = .{ .operation = o },
-                                .childNodes = list,
-                            });
-                        },
+                    const nnode_id = switch (pp) {
+                        .number => |nn| try ast.addNode(.{
+                            .action = .{
+                                .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
+                            },
+                        }),
+                        .identifier => |nn| try ast.addNode(.{
+                            .action = .{
+                                .variable = .{ .name = nn },
+                            },
+                        }),
                         else => {
                             return error.TODO;
                         },
-                    }
+                    };
+                    var list = try ast.allocList(u64, 2);
+                    list[0] = node_id;
+                    list[1] = nnode_id;
+                    ast.parent = try ast.addNode(.{
+                        .action = .{ .operation = o },
+                        .childNodes = list,
+                    });
                 }
             },
             else => {
@@ -199,7 +217,6 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
             .decl => |d| {
                 switch (d) {
                     .@"var", .@"const" => {
-                        const is_const = d == .@"const";
                         const ident = switch (iter.next() orelse return error.InvalidSyntax) {
                             .identifier => |i| i,
                             else => return error.ExpectedIdentifier,
@@ -217,7 +234,6 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
                         _ = try ast.addNode(.{
                             .action = .{ .variable = .{
                                 .name = ident,
-                                .constant = is_const,
                             } },
                         });
                     },

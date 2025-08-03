@@ -104,11 +104,12 @@ pub const iterator = struct {
         return std.mem.eql(u8, self.data[self.idx..][0..val.len], val);
     }
     pub fn next(self: *iterator) !?Token {
-        if (self.idx >= self.data.len) return null;
         while (self.idx < self.data.len and std.mem.indexOfScalar(u8, &std.ascii.whitespace, self.data[self.idx]) != null) {
+            std.log.info("skip whitespace {}:[{}]", .{ self.idx, self.data.len });
             self.idx += 1;
             //
         }
+        if (self.idx >= self.data.len) return null;
         for (ops) |o| {
             if (self.matchString(o.val)) {
                 self.idx += o.val.len;
@@ -135,6 +136,7 @@ pub const iterator = struct {
             self.idx += val.len;
             return .{ .identifier = val.val };
         }
+
         return error.InvalidToken;
     }
 };
@@ -142,6 +144,7 @@ pub const iterator = struct {
 pub fn tokenize(input: []const u8, al: *std.ArrayList(Token)) !void {
     var iter = iterator{ .data = input };
     while (try iter.next()) |token| {
+        std.log.info("Token:[{f}]", .{token});
         try al.append(token);
     }
 }

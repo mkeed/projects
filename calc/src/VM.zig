@@ -26,6 +26,7 @@ pub const VM = struct {
         self.strings.deinit();
     }
     pub fn set(self: *VM, name: []const u8, val: Value) !void {
+        std.log.info("set: {s} => {}", .{ name, val });
         if (self.variables.getPtr(name)) |pos| {
             pos.* = val;
         } else {
@@ -36,16 +37,17 @@ pub const VM = struct {
     }
     pub fn get(self: *VM, name: []const u8) ?Value {
         if (self.variables.get(name)) |val| {
+            std.log.info("get: {s} => {}", .{ name, val });
             return val;
         }
+        std.log.info("get: {s} => null", .{name});
         return null;
     }
 
     pub fn exec(self: *VM, equation: []const u8) !Value {
-        const e = try eq.compile(equation, self.alloc);
+        const e = try eq.compile(equation, self, self.alloc);
         defer e.deinit();
-
-        return error.TODO;
+        return e.value;
     }
 };
 
