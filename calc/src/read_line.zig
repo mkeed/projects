@@ -53,14 +53,52 @@ pub const ReadLine = struct {
         const orig = try enable_raw_mode(self.stdin.handle);
 
         defer std.posix.tcsetattr(self.stdin.handle, .FLUSH, orig) catch {};
+        var index: usize = 0;
         while (true) {
-            _ = try self.stdout.write(self.prompt);
+            var io = self.stdout.deprecatedWriter();
+            try io.print("\r{s}{s}\x1B[{}G", .{ self.prompt, output.items, index + self.prompt.len + 1 });
+
             var buf: [512]u8 = undefined;
 
             const len = try self.stdin.read(&buf);
-            try output.appendSlice(buf[0..len]);
+
+            //std.log.info("{f}", .{std.ascii.hexEscape(buf[0..len], .upper)});
+            if (buf[0] == '\x1B') {
+                switch (buf[2]) {
+                    'A' => {}, // UP
+                    'B' => {}, //DN
+                    'C' => {
+                        if (index + 1 < output.items.len) index += 1;
+                    }, //Forwad
+                    'D' => {
+                        if (index >= 1) index -= 1;
+                    }, //back
+                    else => return error.TODO,
+                }
+            } else {
+                if (std.mem.indexOfAny(u8, buf[0..len], "\r\n\n") != null) break;
+
+                try insert_at(buf[0..len], &index, output);
+            }
         }
         //
+    }
+    fn insert_at(bytes: []const u8, pos: *usize, buf: *std.ArrayList(u8)) !void {
+        if (pos.* == buf.items.len) {
+            try buf.appendSlice(bytes);
+            pos.* += bytes.len;
+        } else {
+            const end = buf.items.len;
+            try buf.appendNTimes(0, bytes.len);
+
+            for (0..(end - pos.*)) |idx| {
+                buf.items[buf.items.len - idx - 1] = buf.items[end - idx - 1];
+            }
+            for (0..bytes.len) |idx| {
+                buf.items[pos.* + idx] = bytes[idx];
+            }
+            pos.* += bytes.len;
+        }
     }
 };
 
