@@ -56,7 +56,7 @@ pub const ReadLine = struct {
         var index: usize = 0;
         while (true) {
             var io = self.stdout.deprecatedWriter();
-            try io.print("\r{s}{s}\x1B[{}G", .{ self.prompt, output.items, index + self.prompt.len + 1 });
+            try io.print("\x1B[1K\r{s}{s}\x1B[{}G", .{ self.prompt, output.items, index + self.prompt.len + 1 });
 
             var buf: [512]u8 = undefined;
 
@@ -75,6 +75,8 @@ pub const ReadLine = struct {
                     }, //back
                     else => return error.TODO,
                 }
+            } else if (buf[0] == 0x7F) {
+                remove_at(&index, 1, output);
             } else {
                 if (std.mem.indexOfAny(u8, buf[0..len], "\r\n\n") != null) break;
 
@@ -82,6 +84,15 @@ pub const ReadLine = struct {
             }
         }
         //
+    }
+    fn remove_at(pos: *usize, cnt: usize, buf: *std.ArrayList(u8)) void {
+        if (pos.* != buf.items.len) {
+            for (0..cnt) |idx| {
+                buf.items[pos.*] = buf.items[pos.* + idx];
+            }
+        }
+        pos.* -= cnt;
+        buf.shrinkRetainingCapacity(buf.items.len - cnt);
     }
     fn insert_at(bytes: []const u8, pos: *usize, buf: *std.ArrayList(u8)) !void {
         if (pos.* == buf.items.len) {
