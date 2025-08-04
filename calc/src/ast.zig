@@ -177,26 +177,29 @@ fn number(ast: *ASTGen, iter: *Iter, n: Token.NumberToken) !void {
 
 fn operator(ast: *ASTGen, iter: *Iter, t: Token.Operator) !void {
     if (iter.next()) |n| {
-        switch (n) {
-            .number => |num| {
-                const parent = ast.parent orelse return error.ExpectedParent;
-                const nnode_id = try ast.addNode(.{
-                    .action = .{
-                        .constant = .{ .number = try std.fmt.parseInt(i64, num.whole, 0) },
-                    },
-                });
-                var list = try ast.allocList(u64, 2);
-                list[0] = parent;
-                list[1] = nnode_id;
-                ast.parent = try ast.addNode(.{
-                    .action = .{ .operation = t },
-                    .childNodes = list,
-                });
-            },
+        const parent = ast.parent orelse return error.ExpectedParent;
+        const nnode_id = switch (n) {
+            .number => |nn| try ast.addNode(.{
+                .action = .{
+                    .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
+                },
+            }),
+            .identifier => |nn| try ast.addNode(.{
+                .action = .{
+                    .variable = .{ .name = nn },
+                },
+            }),
             else => {
-                return error.UnexpectedSymbol;
+                return error.TODO;
             },
-        }
+        };
+        var list = try ast.allocList(u64, 2);
+        list[0] = parent;
+        list[1] = nnode_id;
+        ast.parent = try ast.addNode(.{
+            .action = .{ .operation = t },
+            .childNodes = list,
+        });
     } else {
         return error.UnexpectedEnd;
     }
