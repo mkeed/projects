@@ -152,12 +152,13 @@ test {
 }
 
 pub fn decode(comptime T: type, alloc: std.mem.Allocator, reader: anytype) !std.json.Parsed(T) {
-    var parsed = Parsed(T){
-        .arena = try alloc.create(ArenaAllocator),
+    _ = reader;
+    var parsed = std.json.Parsed(T){
+        .arena = try alloc.create(std.heap.ArenaAllocator),
         .value = undefined,
     };
     errdefer alloc.destroy(parsed.arena);
-    parsed.arena.* = ArenaAllocator.init(allocator);
+    parsed.arena.* = std.heap.ArenaAllocator.init(alloc);
     errdefer parsed.arena.deinit();
 
     return parsed;
