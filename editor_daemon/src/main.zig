@@ -6,16 +6,21 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
+    const dc = DirCallback{
+        .ion = try std.posix.inotify_init1(0),
+    };
+    defer std.posix.close(dc.ion);
     try DirScan.dir_scan(
         std.fs.cwd(),
         alloc,
-        DirCallback{},
+        dc,
     );
 }
 
 const DirCallback = struct {
-    pub fn callback(self: DirCallback, file: []const u8) !void {
-        _ = self;
-        std.log.info("File:{s}", .{file});
+    ion: i32,
+    pub fn callback(self: DirCallback, file: DirScan.DirItem) !void {
+        try std.posix.inotify_add_watch(self.ion, file.full, 
+        std.log.info("File:`{s}` `{s}`", .{ file.dir_name, file.part });
     }
 };

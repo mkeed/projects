@@ -4,6 +4,13 @@ const Item = struct {
     name: []const u8,
 };
 
+pub const DirItem = struct {
+    full: []const u8,
+    dir_name: []const u8,
+    part: []const u8,
+    dir: std.fs.Dir,
+};
+
 pub fn dir_scan(dir: std.fs.Dir, alloc: std.mem.Allocator, callable: anytype) !void {
     var stack = std.ArrayList(Item).init(alloc);
     defer {
@@ -34,7 +41,12 @@ pub fn dir_scan(dir: std.fs.Dir, alloc: std.mem.Allocator, callable: anytype) !v
                     try stack.append(.{ .name = name });
                 },
                 else => {
-                    try callable.callback(name_buf.items);
+                    try callable.callback(.{
+                        .full = name_buf.items,
+                        .dir_name = item.name,
+                        .part = dir_item.name,
+                        .dir = dir,
+                    });
                 },
             }
         }
