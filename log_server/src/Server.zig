@@ -26,15 +26,33 @@ pub const Server = struct {
     }
 };
 
+fn file_exists(dir: std.fs.Dir, file: []const u8) bool {
+    _ = dir.statFile(file) catch return false;
+    return true;
+}
+
+fn setup_unix_socket(dir: std.fs.Dir, file: []const u8) !std.net.Server {
+    const addr = try std.net.Address.initUnix(file);
+    if (file_exists(dir, file)) {
+        try dir.deleteFile(file);
+    }
+    const srv = try addr.listen(.{ .reuse_address = true });
+    return srv;
+}
+
 pub fn run(alloc: std.mem.Allocator, config: Config.Config) !void {
     var server = Server.init(alloc);
     defer server.deinit();
-    const view_addr = try std.net.Address.initUnix(config.viewer_port);
-    const log_addr = try std.net.Address.initUnix(config.log_port);
-    const log_srv = try std.Thread.spawn(.{}, @import("LogServer.zig").run_log_srv, .{ &server, alloc, log_addr });
-    defer log_srv.join();
-    const view_srv = try std.Thread.spawn(.{}, @import("ViewServer.zig").run_view_srv, .{ &server, alloc, view_addr });
-    defer view_srv.join();
+    var view_srv = try setup_unix_socket(std.fs.cwd(), config.viewer_port);
+    defer view_srv.deinit();
+
+    var log_srv = try setup_unix_socket(std.fs.cwd(), config.log_port);
+    defer log_srv.deinit();
+
+    const log_thread = try std.Thread.spawn(.{}, @import("LogServer.zig").run_log_srv, .{ &server, alloc, &log_srv });
+    defer log_thread.join();
+    const view_thread = try std.Thread.spawn(.{}, @import("ViewServer.zig").run_view_srv, .{ &server, alloc, &view_srv });
+    defer view_thread.join();
 }
 
 pub const LogList = struct {

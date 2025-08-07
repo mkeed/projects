@@ -1,11 +1,17 @@
 const std = @import("std");
 pub const Client = struct {
     pub const MessageId = enum(u32) {
-        openFile = 0,
+        attach = 0,
+        openFile = 1,
     };
 
     pub const Message = union(MessageId) {
+        attach: Attach,
         openFile: OpenFile,
+    };
+
+    pub const Attach = struct {
+        directory: []const u8,
     };
 
     pub const OpenFile = struct {
