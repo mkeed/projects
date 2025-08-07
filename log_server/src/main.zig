@@ -1,6 +1,7 @@
 const std = @import("std");
 const log_server = @import("log_server");
 const Config = @import("Config.zig");
+const Server = @import("Server.zig");
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}){};
@@ -10,4 +11,6 @@ pub fn main() !void {
     defer alloc.free(file);
     const config = try std.json.parseFromSlice(Config.Config, alloc, file, .{});
     defer config.deinit();
+
+    try Server.run(alloc, config.value);
 }
