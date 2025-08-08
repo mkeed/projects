@@ -9,6 +9,7 @@ pub const DirItem = struct {
     dir_name: []const u8,
     part: []const u8,
     dir: std.fs.Dir,
+    kind: std.fs.File.Kind,
 };
 
 pub fn dir_scan(dir: std.fs.Dir, alloc: std.mem.Allocator, callable: anytype) !void {
@@ -23,6 +24,15 @@ pub fn dir_scan(dir: std.fs.Dir, alloc: std.mem.Allocator, callable: anytype) !v
         const name = try alloc.dupe(u8, ".");
         errdefer alloc.free(name);
         try stack.append(Item{ .name = name });
+    }
+    {
+        try callable.callback(.{
+            .full = ".",
+            .dir_name = ".",
+            .part = ".",
+            .dir = dir,
+            .kind = .directory,
+        });
     }
     var name_buf = std.ArrayList(u8).init(alloc);
     defer name_buf.deinit();
@@ -40,15 +50,15 @@ pub fn dir_scan(dir: std.fs.Dir, alloc: std.mem.Allocator, callable: anytype) !v
                     errdefer alloc.free(name);
                     try stack.append(.{ .name = name });
                 },
-                else => {
-                    try callable.callback(.{
-                        .full = name_buf.items,
-                        .dir_name = item.name,
-                        .part = dir_item.name,
-                        .dir = dir,
-                    });
-                },
+                else => {},
             }
+            try callable.callback(.{
+                .full = name_buf.items,
+                .dir_name = item.name,
+                .part = dir_item.name,
+                .dir = dir,
+                .kind = dir_item.kind,
+            });
         }
     }
 }
