@@ -1,4 +1,5 @@
 const std = @import("std");
+const EventLoop = @import("el.zig").EventLoop;
 
 const FileRef = struct {
     ref: i32,
@@ -10,6 +11,7 @@ pub const FileNotify = struct {
     //dir: std.fs.Dir,
     files: std.ArrayList(FileRef),
     alloc: std.mem.Allocator,
+    cnt: usize = 0,
     pub fn init(
         alloc: std.mem.Allocator,
         //dir: ?std.fs.Dir,
@@ -42,7 +44,13 @@ pub const FileNotify = struct {
         });
         std.log.info("Path:[{s}]|{}", .{ path, ref });
     }
-    pub fn handle(self: *FileNotify) !void {
+    pub fn handle(
+        self: *FileNotify,
+        fd: std.posix.fd_t,
+        el: *EventLoop,
+    ) !void {
+        self.cnt += 1;
+        if (self.cnt > 20) try el.remove(fd);
         var buf: [4096]u8 align(@alignOf(std.os.linux.inotify_event)) = std.mem.zeroes([4096]u8);
         const len = try std.posix.read(self.fd, &buf);
         var count: usize = 0;

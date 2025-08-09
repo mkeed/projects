@@ -2,11 +2,8 @@ const std = @import("std");
 const GlobalContext = @import("GlobalContext.zig");
 const DirScan = @import("DirScan.zig");
 const FileNotify = @import("FileNotify.zig").FileNotify;
-const EventLoop = @import("EventLoop.zig").EventLoop(.{
-    .listener_type = AllEvents,
-});
 
-pub const AllEvents = union(enum) {};
+const EventLoop = @import("el.zig").EventLoop;
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}){};
@@ -26,13 +23,9 @@ pub fn main() !void {
         alloc,
         DirCallback{ .notify = &notify },
     );
-    for (0..20) |_| {
-        var p = [1]std.posix.pollfd{
-            .{ .fd = notify.fd, .events = std.posix.system.POLL.IN, .revents = 0 },
-        };
-        _ = try std.posix.poll(p[0..], -1);
-        try notify.handle();
-    }
+    try el.add(.{ .fileNotify = &notify }, notify.fd);
+
+    try el.run();
 }
 
 const DirCallback = struct {

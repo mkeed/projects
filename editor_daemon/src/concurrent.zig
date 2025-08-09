@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn isErrFn(comptime T: type) bool {
+inline fn isErrFn(comptime T: type) bool {
     const type_info = @typeInfo(T);
     const info = switch (type_info) {
         .@"fn" => |f| f,
@@ -55,45 +55,58 @@ pub fn List(comptime T: type) type {
             }
             self.backup_list.deinit();
         }
-        pub fn push(self: *Self, comptime func: []const u8, args: anytype) !*T {
+        pub fn push_item(self: *Self, val: T) !*T {
             const pos = try self.alloc.create(T);
             errdefer self.alloc.destroy(pos);
-            const function = @field(T, func);
-            pos.* = if (isErrFn(function)) try @call(.auto, function, args) else @call(.auto, function, args);
-            errdefer {
-                if (@hasDecl(T, "deinit")) {
-                    pos.deinit();
-                }
-            }
+            pos.* = val;
             if (self.lock.tryLock()) {
                 defer self.lock.unlock();
 
                 try self.val.append(pos);
-                return pos;
             } else {
                 self.backup_lock.lock();
                 defer self.backup_lock.unlock();
-                try self.backup_lock.append(pos);
+                try self.backup_list.append(pos);
             }
+            return pos;
+        }
+        pub fn push(self: *Self, comptime func: []const u8, args: anytype) !*T {
+            const function = @field(T, func);
+            const val = if (isErrFn(function)) try @call(.auto, function, args) else @call(.auto, function, args);
+            errdefer {
+                if (@hasDecl(T, "deinit")) {
+                    val.deinit();
+                }
+            }
+            return try self.push_item(val);
         }
         fn push_backup_list(self: *Self) !void {
             self.backup_lock.lock();
             defer self.backup_lock.unlock();
-            if (self.backup_val.items.len > 0) {
+            if (self.backup_list.items.len > 0) {
                 self.lock.lock();
                 defer self.lock.unlock();
                 defer self.backup_list.clearRetainingCapacity();
-                for (self.backup_list.items) |i| try self.vals.append(i);
+                for (self.backup_list.items) |i| try self.val.append(i);
             }
         }
-        pub fn iterate(self: *Self, iter_unit: anytype, comptime func: []const u8) !void {
+        pub fn len(self: Self) usize {
+            return self.val.items.len + self.backup_list.items.len;
+        }
+        pub fn iterate(
+            self: *Self,
+            iter_unit: anytype,
+            comptime func: []const u8,
+        ) !void {
             {
                 self.lock.lockShared();
                 defer self.lock.unlockShared();
                 for (self.val.items) |item| {
-                    const function = @field(iter_unit, func);
+                    const function = @field(@TypeOf(iter_unit), func);
+
                     const args = .{ iter_unit, item };
-                    const early_return = if (isErrFn(function)) try @call(.auto, function, args) else @call(.auto, function, args);
+
+                    const early_return = if (isErrFn(@TypeOf(function))) try @call(.auto, function, args) else @call(.auto, function, args);
                     if (early_return) return;
                 }
             }
