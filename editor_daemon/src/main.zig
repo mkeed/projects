@@ -2,12 +2,18 @@ const std = @import("std");
 const GlobalContext = @import("GlobalContext.zig");
 const DirScan = @import("DirScan.zig");
 const FileNotify = @import("FileNotify.zig").FileNotify;
+const EventLoop = @import("EventLoop.zig").EventLoop(.{
+    .listener_type = AllEvents,
+});
+
+pub const AllEvents = union(enum) {};
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
-
+    var el = try EventLoop.init(alloc);
+    defer el.deinit();
     var notify = try FileNotify.init(
         alloc,
         //std.fs.cwd(),
