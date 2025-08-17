@@ -25,6 +25,7 @@ pub fn EventLoop(comptime opts: EventLoopOpts) type {
         const Self = @This();
         const ListenItem = listenItem(opts.listener_type);
         items: Concurrent.List(ListenItem),
+        to_remove: Concurrent.List(std.posix.fd_t),
         threadPool: *std.Thread.Pool,
         alloc: std.mem.Allocator,
         pub fn init(alloc: std.mem.Allocator) !Self {
@@ -38,10 +39,12 @@ pub fn EventLoop(comptime opts: EventLoopOpts) type {
                 .items = Concurrent.List(ListenItem).init(alloc),
                 .threadPool = tp,
                 .alloc = alloc,
+                .to_remove = Concurrent.List(std.posix.fd_t).init(alloc),
             };
         }
         pub fn deinit(self: *Self) void {
             self.items.deinit();
+            self.to_remove.deinit();
             self.threadPool.deinit();
             self.alloc.destroy(self.threadPool);
         }
@@ -112,6 +115,8 @@ pub fn EventLoop(comptime opts: EventLoopOpts) type {
                 .state = .Sleep,
             });
         }
-        pub fn remove(self: *Self, fd: std.posix.fd_t) void {}
+        pub fn remove(self: *Self, fd: std.posix.fd_t) !void {
+            _ = try self.to_remove.push_item(fd);
+        }
     };
 }

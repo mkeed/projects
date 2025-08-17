@@ -12,8 +12,14 @@ pub const Timer = struct {
         errdefer std.posix.close(fd);
 
         const timer = std.posix.system.itimerspec{
-            .it_interval = .{},
-            .it_value = .{},
+            .it_interval = .{
+                .sec = 0,
+                .nsec = 0,
+            },
+            .it_value = .{
+                .sec = time_millis / std.time.ms_per_s,
+                .nsec = time_millis % std.time.ns_per_ms,
+            },
         };
 
         try std.posix.timerfd_settime(
@@ -22,5 +28,9 @@ pub const Timer = struct {
             &timer,
             null,
         );
+        return .{
+            .fd = fd,
+            .callback = callback,
+        };
     }
 };

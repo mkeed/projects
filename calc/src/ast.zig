@@ -250,7 +250,7 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
             .syntax => |s| {
                 switch (s) {
                     .semiColon => parent = null,
-                    .equal => return error.TODO,
+                    else => return error.TODO,
                 }
             },
             .operator => |o| try operator(&ast, &iter, o),

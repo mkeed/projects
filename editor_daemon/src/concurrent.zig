@@ -19,67 +19,53 @@ inline fn isErrFn(comptime T: type) bool {
 pub fn List(comptime T: type) type {
     return struct {
         const Self = @This();
-        val: std.ArrayList(*T),
+        val: std.ArrayList(T),
         alloc: std.mem.Allocator,
         lock: std.Thread.RwLock,
-        backup_list: std.ArrayList(*T),
+        backup_list: std.ArrayList(T),
         backup_lock: std.Thread.Mutex,
         pub fn init(alloc: std.mem.Allocator) Self {
             return .{
-                .val = std.ArrayList(*T).init(alloc),
+                .val = std.ArrayList(T).init(alloc),
                 .alloc = alloc,
                 .lock = .{},
-                .backup_list = std.ArrayList(*T).init(alloc),
+                .backup_list = std.ArrayList(T).init(alloc),
                 .backup_lock = .{},
             };
         }
         pub fn deinit(self: *Self) void {
-            self.lock.lock();
-            defer self.lock.unlock();
-            for (self.val.items) |i| {
-                if (@hasDecl(T, "deinit")) {
-                    i.deinit();
-                }
-                self.alloc.destroy(i);
+            {
+                self.lock.lock();
+                defer self.lock.unlock();
+                self.val.deinit();
             }
-            self.val.deinit();
             {
                 self.backup_lock.lock();
                 defer self.backup_lock.unlock();
-                for (self.backup_list.items) |i| {
-                    if (@hasDecl(T, "deinit")) {
-                        i.deinit();
-                    }
-                    self.alloc.destroy(i);
-                }
+                self.backup_list.deinit();
             }
-            self.backup_list.deinit();
         }
-        pub fn push_item(self: *Self, val: T) !*T {
-            const pos = try self.alloc.create(T);
-            errdefer self.alloc.destroy(pos);
-            pos.* = val;
+        pub fn push_item(self: *Self, val: T) !void {
             if (self.lock.tryLock()) {
                 defer self.lock.unlock();
 
-                try self.val.append(pos);
+                try self.val.append(val);
             } else {
                 self.backup_lock.lock();
                 defer self.backup_lock.unlock();
-                try self.backup_list.append(pos);
+                try self.backup_list.append(val);
             }
-            return pos;
         }
-        pub fn push(self: *Self, comptime func: []const u8, args: anytype) !*T {
-            const function = @field(T, func);
-            const val = if (isErrFn(function)) try @call(.auto, function, args) else @call(.auto, function, args);
-            errdefer {
-                if (@hasDecl(T, "deinit")) {
-                    val.deinit();
-                }
-            }
-            return try self.push_item(val);
-        }
+        // pub fn push(self: *Self, comptime func: []const u8, args: anytype) !*T {
+        //     const function = @field(T, func);
+        //     const val = if (isErrFn(function)) try @call(.auto, function, args) else @call(.auto, function, args);
+        //     errdefer {
+        //         if (@hasDecl(T, "deinit")) {
+        //             val.deinit();
+        //         }
+        //     }
+        //     return try self.push_item(val);
+        // }
         fn push_backup_list(self: *Self) !void {
             self.backup_lock.lock();
             defer self.backup_lock.unlock();
@@ -101,7 +87,7 @@ pub fn List(comptime T: type) type {
             {
                 self.lock.lockShared();
                 defer self.lock.unlockShared();
-                for (self.val.items) |item| {
+                for (self.val.items) |*item| {
                     const function = @field(@TypeOf(iter_unit), func);
 
                     const args = .{ iter_unit, item };

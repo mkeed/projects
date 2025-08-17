@@ -3,8 +3,12 @@ pub const Operator = enum { add, sub, div, mul, shl, shr };
 pub const Decl = enum { @"const", @"var", fun, @"struct", @"union" };
 pub const Syntax = enum {
     semiColon,
-    equal, //openParen, closeParen, comma
+    equal,
+    openParen,
+    closeParen,
+    comma,
 };
+
 pub const NumberToken = struct {
     whole: []const u8,
     frac: ?[]const u8,
@@ -61,6 +65,9 @@ const decls = [_]struct { val: []const u8, decl: Decl }{
 const syntax = [_]struct { val: []const u8, syntax: Syntax }{
     .{ .val = ";", .syntax = .semiColon },
     .{ .val = "=", .syntax = .equal },
+    .{ .val = "(", .syntax = .openParen },
+    .{ .val = ")", .syntax = .closeParen },
+    .{ .val = ",", .syntax = .comma },
 };
 
 fn tokenize_number(val: []const u8) ?struct { len: usize, num: NumberToken } {
@@ -107,6 +114,10 @@ pub const iterator = struct {
         return std.mem.eql(u8, self.data[self.idx..][0..val.len], val);
     }
     pub fn next(self: *iterator) !?Token {
+        const idx = self.idx;
+        errdefer {
+            std.log.err("[{s}]:[{s}]", .{ self.data[0..idx], self.data[idx..] });
+        }
         while (self.idx < self.data.len and std.mem.indexOfScalar(u8, &std.ascii.whitespace, self.data[self.idx]) != null) {
             std.log.info("skip whitespace {}:[{}]", .{ self.idx, self.data.len });
             self.idx += 1;
