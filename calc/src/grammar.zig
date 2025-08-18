@@ -41,3 +41,11 @@ const utility_rules =
     \\parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
     \\arguments      → expression ( "," expression )* ;
 ;
+
+const lex =
+    \\NUMBER         → DIGIT+ ( "." DIGIT+ )? ;
+    \\STRING         → "\"" <any char except "\"">* "\"" ;
+    \\IDENTIFIER     → ALPHA ( ALPHA | DIGIT )* ;
+    \\ALPHA          → "a" ... "z" | "A" ... "Z" | "_" ;
+    \\DIGIT          → "0" ... "9" ;
+;

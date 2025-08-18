@@ -11,10 +11,15 @@ pub const Variable = struct {
     name: []const u8,
 };
 
+pub const FunctionCall = struct {
+    name: []const u8,
+};
+
 pub const Action = union(enum) {
     constant: Constant,
     variable: Variable,
     operation: Token.Operator,
+    function_call: FunctionCall,
     pub fn format(self: Action, writer: anytype) !void {
         switch (self) {
             .constant => |c| {
@@ -133,6 +138,27 @@ const Iter = struct {
     }
 };
 
+fn parse_identifier(ast: *ASTGen, iter: *Iter, identifier: []const u8) !usize {
+    if (iter.peek()) |p| {
+        switch (p) {
+            .syntax => |s| {
+                switch (s) {
+                    .semiColon, .equal, .closeParen, .comma => {},
+                    .openParen => {
+                        //
+                    },
+                }
+            },
+            else => {},
+        }
+    }
+    return ast.addNode(.{
+        .action = .{
+            .variable = .{ .name = identifier },
+        },
+    });
+}
+
 fn number(ast: *ASTGen, iter: *Iter, n: Token.NumberToken) !void {
     const node_id = try ast.addNode(.{
         .action = .{
@@ -150,11 +176,8 @@ fn number(ast: *ASTGen, iter: *Iter, n: Token.NumberToken) !void {
                                 .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
                             },
                         }),
-                        .identifier => |nn| try ast.addNode(.{
-                            .action = .{
-                                .variable = .{ .name = nn },
-                            },
-                        }),
+                        .identifier => |nn| try parse_identifier(ast, iter, nn),
+
                         else => {
                             return error.TODO;
                         },
@@ -184,11 +207,7 @@ fn operator(ast: *ASTGen, iter: *Iter, t: Token.Operator) !void {
                     .constant = .{ .number = try std.fmt.parseInt(i64, nn.whole, 0) },
                 },
             }),
-            .identifier => |nn| try ast.addNode(.{
-                .action = .{
-                    .variable = .{ .name = nn },
-                },
-            }),
+            .identifier => |nn| try parse_identifier(ast, iter, nn),
             else => {
                 return error.TODO;
             },
@@ -254,8 +273,11 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
                 }
             },
             .operator => |o| try operator(&ast, &iter, o),
-            else => {
-                return error.TODO;
+            .identifier => |i| {
+                _ = try parse_identifier(&ast, &iter, i);
+            },
+            .string => {
+                return error.TODOString;
             },
         }
     }

@@ -16,9 +16,16 @@ pub fn main() !void {
     defer rl.deinit();
     var input = std.ArrayList(u8).init(alloc);
     defer input.deinit();
-
-    try rl.read(&input);
-    std.log.info("Input: [{s}]", .{input.items});
-    const val = try vm.exec(input.items);
+    const use_rl = false;
+    const exp = blk: {
+        if (use_rl) {
+            try rl.read(&input);
+            return input.items;
+        } else {
+            break :blk "thing(123)";
+        }
+    };
+    std.log.info("Input: [{s}]", .{exp});
+    const val = try vm.exec(exp);
     std.log.err("{}", .{val});
 }
