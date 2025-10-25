@@ -1,6 +1,6 @@
 const std = @import("std");
 const String = @import("String.zig").String;
-const GapBufer = @import("Buffer.zig").GapBuffer;
+const GapBuffer = @import("Buffer.zig").GapBuffer;
 
 pub const BufferMode = struct {
     read_only: bool = false,
@@ -34,5 +34,6 @@ pub const EditorContext = struct {
 
     pub fn openFile(self: EditorContext, path: []const u8) !void {
         const file = self.dir.openFile(path, .{});
+        defer file.close();
     }
 };

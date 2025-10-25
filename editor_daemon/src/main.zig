@@ -4,8 +4,10 @@ const DirScan = @import("DirScan.zig");
 const FileNotify = @import("FileNotify.zig").FileNotify;
 
 const EventLoop = @import("el.zig").EventLoop;
+const ssh = @import("ssh.zig");
 
 pub fn main() !void {
+    try ssh.connect();
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
