@@ -12,7 +12,7 @@ pub const Exec = struct {
 };
 
 pub fn compile(eq: []const u8, vm: *VM, alloc: std.mem.Allocator) !Exec {
-    var tokens = std.ArrayList(tokenize.Token).init(alloc);
+    var tokens = std.array_list.Managed(tokenize.Token).init(alloc);
     defer tokens.deinit();
     try tokenize.tokenize(eq, &tokens);
     const tree = try ast.gen_ast(tokens.items, alloc);

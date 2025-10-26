@@ -14,8 +14,8 @@ pub fn main() !void {
 
     var rl = ReadLine.init(alloc);
     defer rl.deinit();
-    var input = std.ArrayList(u8).init(alloc);
-    defer input.deinit();
+    var input = std.ArrayList(u8).empty;
+    defer input.deinit(alloc);
     const use_rl = false;
     const exp = blk: {
         if (use_rl) {

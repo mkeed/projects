@@ -31,6 +31,7 @@ pub const Action = union(enum) {
             .operation => |o| {
                 try writer.print("({})", .{o});
             },
+            else => unreachable,
         }
     }
 };
@@ -41,12 +42,12 @@ pub const ASTGen = struct {
         childNodes: ?[]const u64 = null,
     };
     arena: std.heap.ArenaAllocator,
-    nodes: std.ArrayList(Node),
+    nodes: std.array_list.Managed(Node),
     parent: ?usize,
     pub fn init(alloc: std.mem.Allocator) ASTGen {
         return .{
             .arena = std.heap.ArenaAllocator.init(alloc),
-            .nodes = std.ArrayList(Node).init(alloc),
+            .nodes = std.array_list.Managed(Node).init(alloc),
             .parent = null,
         };
     }
@@ -119,6 +120,7 @@ pub const ASTGen = struct {
                     },
                 };
             },
+            else => unreachable,
         }
     }
 };
@@ -267,6 +269,7 @@ pub fn gen_ast(tokens: []const Token.Token, alloc: std.mem.Allocator) !ASTGen {
                 }
             },
             .syntax => |s| {
+                errdefer std.log.err("err:{}", .{s});
                 switch (s) {
                     .semiColon => parent = null,
                     else => return error.TODO,

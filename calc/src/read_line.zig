@@ -1,10 +1,10 @@
 const std = @import("std");
 
 pub const String = struct {
-    data: std.ArrayList(u8),
+    data: std.array_list.Managed(u8),
     pub fn init(alloc: std.mem.Allocator) String {
         return .{
-            .data = std.ArrayList(u8).init(alloc),
+            .data = std.array_list.Managed(u8).init(alloc),
         };
     }
     pub fn deinit(self: String) void {
@@ -18,12 +18,12 @@ pub const Item = struct {
 
 pub const History = struct {
     alloc: std.mem.Allocator,
-    items: std.ArrayList(Item),
+    items: std.array_list.Managed(Item),
 
     pub fn init(alloc: std.mem.Allocator) History {
         return .{
             .alloc = alloc,
-            .items = std.ArrayList(Item).init(alloc),
+            .items = std.array_list.Managed(Item).init(alloc),
         };
     }
     pub fn deinit(self: History) void {

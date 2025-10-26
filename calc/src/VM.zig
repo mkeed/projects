@@ -10,7 +10,7 @@ pub const VM = struct {
         return .{
             .alloc = alloc,
             .variables = std.StringArrayHashMap(Value).init(alloc),
-            .strings = std.ArrayList([]const u8).init(alloc),
+            .strings = std.ArrayList([]const u8).empty,
         };
     }
     pub fn deinit(self: *VM) void {
@@ -23,7 +23,7 @@ pub const VM = struct {
             self.alloc.free(k);
         }
 
-        self.strings.deinit();
+        self.strings.deinit(self.alloc);
     }
     pub fn set(self: *VM, name: []const u8, val: Value) !void {
         std.log.info("set: {s} => {}", .{ name, val });

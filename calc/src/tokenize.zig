@@ -155,7 +155,7 @@ pub const iterator = struct {
     }
 };
 
-pub fn tokenize(input: []const u8, al: *std.ArrayList(Token)) !void {
+pub fn tokenize(input: []const u8, al: *std.array_list.Managed(Token)) !void {
     var iter = iterator{ .data = input };
     while (try iter.next()) |token| {
         std.log.info("Token:[{f}]", .{token});
