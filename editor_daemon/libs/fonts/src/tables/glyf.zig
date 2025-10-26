@@ -1,6 +1,7 @@
 const std = @import("std");
 const util = @import("../utils.zig");
 const loca = @import("loca.zig").loca;
+const maxp = @import("maxp.zig").maxp;
 
 pub const glyf = struct {};
 
@@ -42,14 +43,16 @@ const EndIter = struct {
         };
     }
 
-    pub fn next(self: *EndIter) !?u32 {
+    pub fn next(self: *EndIter) !?bool {
         defer self.idx += 1;
+        var new = false;
         if (self.idx > self.next_end) {
+            new = true;
             self.glyf_id += 1;
             if (self.glyf_id >= self.num) return null;
             self.next_end = try self.eps.read(u16);
         }
-        return self.glyf_id;
+        return new;
     }
 };
 
@@ -114,8 +117,15 @@ const PointIter = struct {
     y_data: []const u8,
     y_idx: usize = 0,
     prev_y: i32 = 0,
+    points: *std.ArrayList(Point),
+    contour_iter: EndIter,
+
+    pub fn get_curve(self: *PointIter) ?[]const Point {
+        self.points.clearRetainingCapacity();
+    }
     pub fn next(self: *PointIter) ?struct { p: Point, flag: Flag } {
         if (self.flag.next()) |n| {
+            std.debug.assert(n.onCurve == false);
             var x: i32 = 0;
             var y: i32 = 0;
             if (n.x_short) {
@@ -164,7 +174,11 @@ const PointIter = struct {
     }
 };
 
-pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca) !glyf {
+pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !glyf {
+    var contour_points = std.ArrayList(Point){};
+    try contour_points.ensureTotalCapacity(alloc, m.maxPoints);
+
+    defer contour_points.deinit(alloc);
     for (0..l.numGlyphs) |idx| {
         const pos = l.get(idx);
         var reader = util.Reader{ .data = data[pos..] };
@@ -188,6 +202,8 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca) !glyf {
                 .flag = flag_iter,
                 .x_data = x_s,
                 .y_data = y_s,
+                .points = &contour_points,
+                .contour_iter = iter,
             };
             while (try iter.next()) |_| {
                 const point = pt.next().?;
@@ -198,7 +214,6 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca) !glyf {
         } else {}
         break;
     }
-    _ = alloc;
 
     return .{};
 }

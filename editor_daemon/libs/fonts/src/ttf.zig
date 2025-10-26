@@ -86,7 +86,7 @@ test {
     const hhea = try @import("tables/hhea.zig").decode(header.get("hhea") orelse unreachable, std.testing.allocator);
     const loca = try @import("tables/loca.zig").decode(header.get("loca") orelse unreachable, head, m);
     const hmtx = try @import("tables/hmtx.zig").decode(header.get("hmtx") orelse unreachable, m, hhea);
-    const glyf = try @import("tables/glyf.zig").decode(header.get("glyf") orelse unreachable, std.testing.allocator, loca);
+    const glyf = try @import("tables/glyf.zig").decode(header.get("glyf") orelse unreachable, std.testing.allocator, loca, m);
     var cmap = try @import("tables/cmap.zig").decode(header.get("cmap") orelse unreachable, std.testing.allocator);
     defer cmap.deinit();
     std.log.err("map: 0xc0 => {x}", .{cmap.get(0xc0)});
