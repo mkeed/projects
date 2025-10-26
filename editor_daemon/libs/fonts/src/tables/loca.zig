@@ -24,6 +24,11 @@ pub const loca = struct {
 };
 
 pub fn decode(data: []const u8, h: head, m: maxp) !loca {
+    // for (0..m.numGlyphs) |ng| {
+    //     const pos = ng * 2;
+    //     std.log.err("[{}] => {}", .{ ng, std.mem.readVarInt(u16, data[pos..][0..2], .big) });
+    // }
+
     return .{
         .numGlyphs = m.numGlyphs,
         .format = switch (h.indexToLocFormat) {

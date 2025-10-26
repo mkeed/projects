@@ -101,6 +101,6 @@ test {
     std.log.err("glyf {}", .{glyf});
     std.log.err("loca {}", .{loca});
     for (header.tables) |t| {
-        std.log.err("[{s}]", .{t.name});
+        std.log.err("[{s}][{}]", .{ t.name, t.data.len });
     }
 }

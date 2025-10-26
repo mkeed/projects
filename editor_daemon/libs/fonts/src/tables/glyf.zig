@@ -26,33 +26,21 @@ pub const Flag = packed struct(u8) {
 
 const EndIter = struct {
     eps: util.Reader,
-    next_end: u16,
-    num: usize,
-    idx: usize = 0,
-    glyf_id: u32 = 0,
-    pub fn init(data: []const u8, num: u32) !EndIter {
-        var endPoints = util.Reader{ .data = data };
-        const next_end = try endPoints.read(u16);
-
+    prev: u16 = 0,
+    pub fn init(data: []const u8) EndIter {
         return .{
-            .eps = endPoints,
-            .next_end = next_end,
-            .num = num,
-            .idx = 0,
-            .glyf_id = 0,
+            .eps = util.Reader{ .data = data },
         };
     }
 
-    pub fn next(self: *EndIter) !?bool {
-        defer self.idx += 1;
-        var new = false;
-        if (self.idx > self.next_end) {
-            new = true;
-            self.glyf_id += 1;
-            if (self.glyf_id >= self.num) return null;
-            self.next_end = try self.eps.read(u16);
+    pub fn next_pt(self: *EndIter) ?usize {
+        const next_end = self.eps.read(u16) catch return null;
+        defer self.prev = next_end;
+        std.log.err("next_pt:{}", .{next_end - self.prev});
+        if (self.prev == 0) {
+            return (next_end - self.prev) + 1;
         }
-        return new;
+        return next_end - self.prev;
     }
 };
 
@@ -122,10 +110,19 @@ const PointIter = struct {
 
     pub fn get_curve(self: *PointIter) ?[]const Point {
         self.points.clearRetainingCapacity();
+        if (self.contour_iter.next_pt()) |p| {
+            for (0..p) |_| {
+                const n = self.next().?;
+
+                self.points.appendAssumeCapacity(n.p);
+            }
+            return self.points.items;
+        }
+        return null;
     }
     pub fn next(self: *PointIter) ?struct { p: Point, flag: Flag } {
         if (self.flag.next()) |n| {
-            std.debug.assert(n.onCurve == false);
+            std.debug.assert(n.on_curve == true);
             var x: i32 = 0;
             var y: i32 = 0;
             if (n.x_short) {
@@ -181,12 +178,13 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !gly
     defer contour_points.deinit(alloc);
     for (0..l.numGlyphs) |idx| {
         const pos = l.get(idx);
+        std.log.err("pos:{}|{}", .{ pos, idx });
         var reader = util.Reader{ .data = data[pos..] };
         const header = try reader.read(glyf_header);
         std.log.err("{}", .{header});
         if (header.numberOfContours > 0) {
-            var iter = try EndIter.init(try reader.takeBytes(@intCast(2 * header.numberOfContours)), @intCast(header.numberOfContours));
-            const end_pt = std.mem.readVarInt(u16, iter.eps.data[@intCast(2 * (header.numberOfContours - 1))..][0..2], .big);
+            const ends = try reader.takeBytes(@intCast(2 * header.numberOfContours));
+            const end_pt = std.mem.readVarInt(u16, ends[@intCast(2 * (header.numberOfContours - 1))..][0..2], .big);
 
             const ins_length = try reader.read(u16);
             const ins = try reader.takeBytes(ins_length);
@@ -203,16 +201,16 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !gly
                 .x_data = x_s,
                 .y_data = y_s,
                 .points = &contour_points,
-                .contour_iter = iter,
+                .contour_iter = EndIter.init(ends),
             };
-            while (try iter.next()) |_| {
-                const point = pt.next().?;
-                std.log.err("{}", .{point.p});
-                //const flag = flag_iter.next().?;
-                //std.log.err("{}|{}", .{ idx2, flag });
+            while (pt.get_curve()) |curve| {
+                for (curve, 0..) |c, c_idx| {
+                    std.log.info("[{}]{}", .{ c_idx, c });
+                }
             }
+        } else if (header.numberOfContours == -1) {
+            unreachable;
         } else {}
-        break;
     }
 
     return .{};
