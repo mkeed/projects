@@ -15,11 +15,14 @@ pub const Version16Dot16 = struct {
     major: u16,
     minor: u16,
 };
+pub const Tag = struct {
+    char: [4]u8,
+};
 
 pub const Reader = struct {
     data: []const u8,
     idx: usize = 0,
-    fn takeBytes(self: *Reader, len: usize) ![]const u8 {
+    pub fn takeBytes(self: *Reader, len: usize) ![]const u8 {
         if (self.idx + len > self.data.len) {
             return error.TooLong;
         }
@@ -47,6 +50,18 @@ pub const Reader = struct {
                 const bytes = try self.takeBytes(@sizeOf(T));
                 return std.mem.readVarInt(T, bytes, .big);
             },
+            .@"enum" => |e| {
+                const int = try self.read(e.tag_type);
+                errdefer std.log.err("Bad Enum: {}", .{int});
+                return try std.meta.intToEnum(T, int);
+            },
+            .array => |a| {
+                var ret: T = undefined;
+                for (&ret) |*val| {
+                    val.* = try self.read(a.child);
+                }
+                return ret;
+            },
             else => {
                 @compileError("TODO");
             },
@@ -57,4 +72,17 @@ pub const Reader = struct {
 pub fn read(comptime T: type, data: []const u8) !T {
     var reader = Reader{ .data = data };
     return try reader.read(T);
+}
+
+pub fn packedSize(comptime T: type) usize {
+    switch (@typeInfo(T)) {
+        .@"struct" => |s| {
+            var size: usize = 0;
+            inline for (s.fields) |f| {
+                size += @sizeOf(f.type);
+            }
+            return size;
+        },
+        else => @compileError("TODO"),
+    }
 }

@@ -19,7 +19,6 @@ pub const maxp = struct {
     maxComponentDepth: u16,
 };
 
-pub fn decode(data: []const u8, alloc: std.mem.Allocator) !maxp {
-    _ = alloc;
+pub fn decode(data: []const u8) !maxp {
     return try util.read(maxp, data);
 }

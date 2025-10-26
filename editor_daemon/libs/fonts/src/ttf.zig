@@ -64,6 +64,7 @@ fn parseHeader(data: []const u8, alloc: std.mem.Allocator) !Header {
             std.log.err("Bad checksum[{s}] {x} != {x}", .{ tag, checksum, calc_checksum });
             return error.FailedChecksum;
         }
+        //std.log.err("[{s}]", .{tag});
         tables[t] = .{
             .data = section_data,
             .name = tag,
@@ -77,6 +78,29 @@ test {
 
     const header = try parseHeader(file, std.testing.allocator);
     defer header.deinit(std.testing.allocator);
-    const m = try @import("tables/maxp.zig").decode(header.get("maxp") orelse unreachable, std.testing.allocator);
-    std.log.err("{}", .{m});
+    const head = try @import("tables/head.zig").decode(header.get("head") orelse unreachable);
+    const os_2 = try @import("tables/os_2.zig").decode(header.get("OS/2") orelse unreachable);
+    const post = try @import("tables/post.zig").decode(header.get("post") orelse unreachable);
+    const m = try @import("tables/maxp.zig").decode(header.get("maxp") orelse unreachable);
+    const n = try @import("tables/name.zig").decode(header.get("name") orelse unreachable);
+    const hhea = try @import("tables/hhea.zig").decode(header.get("hhea") orelse unreachable, std.testing.allocator);
+    const loca = try @import("tables/loca.zig").decode(header.get("loca") orelse unreachable, head, m);
+    const hmtx = try @import("tables/hmtx.zig").decode(header.get("hmtx") orelse unreachable, m, hhea);
+    const glyf = try @import("tables/glyf.zig").decode(header.get("glyf") orelse unreachable, std.testing.allocator, loca);
+    var cmap = try @import("tables/cmap.zig").decode(header.get("cmap") orelse unreachable, std.testing.allocator);
+    defer cmap.deinit();
+    std.log.err("map: 0xc0 => {x}", .{cmap.get(0xc0)});
+    std.log.err("maxp {}", .{m});
+    std.log.err("name {}", .{n});
+    std.log.err("hhea {}", .{hhea});
+    std.log.err("hmtx {}", .{hmtx});
+    std.log.err("head {}", .{head});
+    std.log.err("cmap {}", .{cmap});
+    std.log.err("OS/2 {}", .{os_2});
+    std.log.err("post {}", .{post});
+    std.log.err("glyf {}", .{glyf});
+    std.log.err("loca {}", .{loca});
+    for (header.tables) |t| {
+        std.log.err("[{s}]", .{t.name});
+    }
 }
