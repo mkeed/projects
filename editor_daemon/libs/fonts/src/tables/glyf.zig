@@ -59,16 +59,18 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca) !glyf {
         var reader = util.Reader{ .data = data[pos..] };
         const header = try reader.read(glyf_header);
         std.log.err("{}", .{header});
-        var iter = try EndIter.init(try reader.takeBytes(@intCast(2 * header.numberOfContours)), @intCast(header.numberOfContours));
+        if (header.numberOfContours > 0) {
+            var iter = try EndIter.init(try reader.takeBytes(@intCast(2 * header.numberOfContours)), @intCast(header.numberOfContours));
 
-        const ins_length = try reader.read(u16);
-        const ins = try reader.takeBytes(ins_length);
+            const ins_length = try reader.read(u16);
+            const ins = try reader.takeBytes(ins_length);
 
-        std.log.err("[{}]{x}", .{ ins_length, ins });
-        while (try iter.next()) |idx2| {
-            const flag = try reader.read(Flag);
-            std.log.err("{}|{}", .{ idx2, flag });
-        }
+            std.log.err("[{}]{x}", .{ ins_length, ins });
+            while (try iter.next()) |idx2| {
+                const flag = try reader.read(Flag);
+                std.log.err("{}|{}", .{ idx2, flag });
+            }
+        } else {}
     }
     _ = alloc;
 
