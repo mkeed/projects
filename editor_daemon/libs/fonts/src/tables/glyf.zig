@@ -2,6 +2,7 @@ const std = @import("std");
 const util = @import("../utils.zig");
 const loca = @import("loca.zig").loca;
 const maxp = @import("maxp.zig").maxp;
+const cmap = @import("cmap.zig").cmap;
 
 pub const glyf = struct {};
 
@@ -95,6 +96,7 @@ const FlagIter = struct {
 const Point = struct {
     x: i32,
     y: i32,
+    on_curve: bool,
 };
 
 const PointIter = struct {
@@ -122,7 +124,7 @@ const PointIter = struct {
     }
     pub fn next(self: *PointIter) ?struct { p: Point, flag: Flag } {
         if (self.flag.next()) |n| {
-            std.debug.assert(n.on_curve == true);
+            //std.debug.assert(n.on_curve == true);
             var x: i32 = 0;
             var y: i32 = 0;
             if (n.x_short) {
@@ -163,6 +165,7 @@ const PointIter = struct {
                 .p = .{
                     .x = x,
                     .y = y,
+                    .on_curve = n.on_curve,
                 },
                 .flag = n,
             };
@@ -171,14 +174,19 @@ const PointIter = struct {
     }
 };
 
-pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !glyf {
+pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map: *const cmap) !glyf {
     var contour_points = std.ArrayList(Point){};
     try contour_points.ensureTotalCapacity(alloc, m.maxPoints);
 
     defer contour_points.deinit(alloc);
-    for (0..l.numGlyphs) |idx| {
-        const pos = l.get(idx);
-        std.log.err("pos:{}|{}", .{ pos, idx });
+    const char = "#!^%";
+    for (char) |map_c| {
+        //for (0..l.numGlyphs) |idx| {
+        const mapped_c = map.get(map_c);
+        const pos = l.get(mapped_c);
+        //_ = map;
+        std.log.err("pos:{}|{}|{c}", .{ mapped_c, pos, map_c });
+        std.log.err("data:{x}", .{data[pos..][0..50]});
         var reader = util.Reader{ .data = data[pos..] };
         const header = try reader.read(glyf_header);
         std.log.err("{}", .{header});
@@ -193,8 +201,7 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !gly
             _ = try reader.takeBytes(end_of_flags.flag_end);
             const x_s = try reader.takeBytes(end_of_flags.xCoordend);
             const y_s = reader.data[reader.idx..];
-            std.log.err("{} X {}", .{ std.mem.readVarInt(i16, x_s[0..2], .big), std.mem.readVarInt(i16, y_s[0..2], .big) });
-            std.log.err("`{x}` `{x}`", .{ x_s, y_s });
+            //std.log.err("`{x}` `{x}`", .{ x_s, y_s });
             std.log.err("[{}]{x}[{}]", .{ ins_length, ins, end_of_flags });
             var pt = PointIter{
                 .flag = flag_iter,
@@ -205,12 +212,14 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp) !gly
             };
             while (pt.get_curve()) |curve| {
                 for (curve, 0..) |c, c_idx| {
-                    std.log.info("[{}]{}", .{ c_idx, c });
+                    std.log.err("[{}]{}", .{ c_idx, c });
                 }
             }
+            std.log.err("y_used {}", .{pt.y_idx});
         } else if (header.numberOfContours == -1) {
             unreachable;
         } else {}
+        std.log.err("Used: {}", .{reader.idx});
     }
 
     return .{};

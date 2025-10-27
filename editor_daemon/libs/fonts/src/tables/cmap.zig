@@ -80,7 +80,7 @@ pub const cmap = struct {
             try self.map.put(key, glyphs);
         }
     }
-    pub fn get(self: *cmap, char: u32) u32 {
+    pub fn get(self: *const cmap, char: u32) u32 {
         const key = char & ~@as(u32, 0xFF);
         const idx: u8 = @truncate(char);
         if (self.map.get(key)) |val| {
