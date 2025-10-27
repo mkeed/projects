@@ -179,7 +179,7 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
     try contour_points.ensureTotalCapacity(alloc, m.maxPoints);
 
     defer contour_points.deinit(alloc);
-    const char = "#!^%";
+    const char = "\xBC#!^%";
     for (char) |map_c| {
         //for (0..l.numGlyphs) |idx| {
         const mapped_c = map.get(map_c);
@@ -217,6 +217,14 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
             }
             std.log.err("y_used {}", .{pt.y_idx});
         } else if (header.numberOfContours == -1) {
+            const flags = try reader.read(CompositeFlag);
+            const index = try reader.read(u16);
+            std.log.err("{} {}", .{ flags, index });
+            const arg1 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
+            const arg2 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
+            if (flags.we_have_a_scale) {} else if (flags.we_have_an_x_and_y_scale) {} else if (flags.we_have_a_two_by_two) {}
+            std.log.err("arg1:{} arg2:{}", .{ arg1, arg2 });
+            std.log.err("arg1:{} arg2:{}", .{ @as(i16, @bitCast(arg1)), @as(i16, @bitCast(arg2)) });
             unreachable;
         } else {}
         std.log.err("Used: {}", .{reader.idx});
@@ -224,3 +232,20 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
 
     return .{};
 }
+
+const CompositeFlag = packed struct(u16) {
+    arg_1_and_2_are_words: bool,
+    args_are_xy_values: bool,
+    round_xy_to_grid: bool,
+    we_have_a_scale: bool,
+    res1: bool,
+    more_components: bool,
+    we_have_an_x_and_y_scale: bool,
+    we_have_a_two_by_two: bool,
+    we_have_instructions: bool,
+    use_my_metrics: bool,
+    overlap_compound: bool,
+    scaled_component_offset: bool,
+    unscaled_component_offset: bool,
+    res2: u3,
+};
