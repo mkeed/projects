@@ -103,6 +103,8 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator) !cmap {
 
         switch (subtable.format) {
             4 => try parse_v4(data[rec.subtableOffset..][0..subtable.length], &ret),
+            6 => try parse_v6(data[rec.subtableOffset..][0..subtable.length], &ret),
+            12 => try parse_v12(data[rec.subtableOffset..], &ret),
             else => {
                 std.log.err("Subtable:{}", .{subtable});
                 return error.Unknown;
@@ -158,5 +160,49 @@ fn parse_v4(data: []const u8, c: *cmap) !void {
                 try c.set(@intCast(char), @intCast(glyphId));
             }
         }
+    }
+}
+
+const v12_header = struct {
+    format: u16,
+    res: u16,
+    length: u32,
+    lang: u32,
+    numGroups: u32,
+};
+
+const SequentialMapGroup = struct {
+    startChar: u32,
+    endChar: u32,
+    startGlyphID: u32,
+};
+
+fn parse_v12(data: []const u8, c: *cmap) !void {
+    var reader = util.Reader{ .data = data };
+    const header = try reader.read(v12_header);
+    for (0..header.numGroups) |_| {
+        const group = try reader.read(SequentialMapGroup);
+        const num_items = group.endChar - group.startChar + 1;
+        for (0..num_items) |_idx| {
+            const idx: u32 = @intCast(_idx);
+            try c.set(group.startChar + idx, group.startGlyphID + idx);
+        }
+    }
+}
+
+const v6_header = struct {
+    format: u16,
+    length: u16,
+    language: u16,
+    firstCode: u16,
+    entryCount: u16,
+};
+
+fn parse_v6(data: []const u8, c: *cmap) !void {
+    var reader = util.Reader{ .data = data };
+    const header = try reader.read(v6_header);
+    for (0..header.entryCount) |ec| {
+        const code = try reader.read(u16);
+        try c.set(@intCast(header.firstCode + ec), code);
     }
 }

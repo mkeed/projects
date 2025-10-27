@@ -27,11 +27,14 @@ pub fn decode(data: []const u8) !name {
 
         const storage_offset = n.storageOffset + record.stringOffset;
         const string = data[storage_offset..][0..record.length];
-        for (0..string.len / 2) |utf8_idx| {
-            utf16_le_arr[utf8_idx] = std.mem.readVarInt(u16, string[utf8_idx * 2 ..][0..2], .big);
+        if (string.len < 1000) {
+            for (0..string.len / 2) |utf8_idx| {
+                utf16_le_arr[utf8_idx] = std.mem.readVarInt(u16, string[utf8_idx * 2 ..][0..2], .big);
+            }
+
+            const utf8_string = try std.unicode.utf16LeToUtf8(&utf8_buf, utf16_le_arr[0 .. string.len / 2]);
+            _ = utf8_string;
         }
-        const utf8_string = try std.unicode.utf16LeToUtf8(&utf8_buf, utf16_le_arr[0 .. string.len / 2]);
-        _ = utf8_string;
         //std.log.err("{} => [{s}]", .{ record, utf8_buf[0..utf8_string] });
     }
 
