@@ -13,7 +13,7 @@ pub const loca = struct {
         switch (self.format) {
             .short => {
                 const offset = 2 * point;
-                return std.mem.readVarInt(u16, self.data[offset..][0..2], .big) * 2;
+                return @as(u32, @intCast(std.mem.readVarInt(u16, self.data[offset..][0..2], .big))) * 2;
             },
             .long => {
                 const offset = 4 * point;

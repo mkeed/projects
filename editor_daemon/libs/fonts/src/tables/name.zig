@@ -18,9 +18,9 @@ pub const NameRecord = struct {
 
 pub fn decode(data: []const u8) !name {
     const n = try util.read(name, data);
-    std.log.err("{}", .{n});
-    var utf16_le_arr = std.mem.zeroes([256]u16);
-    var utf8_buf = std.mem.zeroes([512]u8);
+    //std.log.err("{}", .{n});
+    var utf16_le_arr = std.mem.zeroes([512]u16);
+    var utf8_buf = std.mem.zeroes([1024]u8);
     for (0..n.count) |idx| {
         const offset = util.packedSize(NameRecord) * idx + @sizeOf(u16) * 3;
         const record = try util.read(NameRecord, data[offset..]);

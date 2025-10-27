@@ -73,6 +73,27 @@ fn parseHeader(data: []const u8, alloc: std.mem.Allocator) !Header {
     return .{ .tables = tables };
 }
 
+pub fn parse_file(file: []const u8, alloc: std.mem.Allocator) !void {
+    const header = try parseHeader(file, alloc);
+    defer header.deinit(alloc);
+    const head = try @import("tables/head.zig").decode(header.get("head") orelse unreachable);
+    const os_2 = try @import("tables/os_2.zig").decode(header.get("OS/2") orelse unreachable);
+    const post = try @import("tables/post.zig").decode(header.get("post") orelse unreachable);
+    const m = try @import("tables/maxp.zig").decode(header.get("maxp") orelse unreachable);
+    const n = try @import("tables/name.zig").decode(header.get("name") orelse unreachable);
+    var cmap = try @import("tables/cmap.zig").decode(header.get("cmap") orelse unreachable, alloc);
+    defer cmap.deinit();
+    const hhea = try @import("tables/hhea.zig").decode(header.get("hhea") orelse unreachable, alloc);
+    const loca = try @import("tables/loca.zig").decode(header.get("loca") orelse unreachable, head, m);
+    const hmtx = try @import("tables/hmtx.zig").decode(header.get("hmtx") orelse unreachable, m, hhea);
+    const glyf = try @import("tables/glyf.zig").decode(header.get("glyf") orelse unreachable, alloc, loca, m, &cmap);
+    _ = glyf;
+    _ = hmtx;
+    _ = post;
+    _ = os_2;
+    _ = n;
+}
+
 test {
     const file = @embedFile("Roboto-Black.ttf");
 

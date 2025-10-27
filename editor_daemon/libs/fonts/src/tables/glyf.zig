@@ -37,7 +37,6 @@ const EndIter = struct {
     pub fn next_pt(self: *EndIter) ?usize {
         const next_end = self.eps.read(u16) catch return null;
         defer self.prev = next_end;
-        std.log.err("next_pt:{}", .{next_end - self.prev});
         if (self.prev == 0) {
             return (next_end - self.prev) + 1;
         }
@@ -179,30 +178,32 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
     try contour_points.ensureTotalCapacity(alloc, m.maxPoints);
 
     defer contour_points.deinit(alloc);
-    const char = "\xBC#!^%";
-    for (char) |map_c| {
-        //for (0..l.numGlyphs) |idx| {
-        const mapped_c = map.get(map_c);
-        const pos = l.get(mapped_c);
-        //_ = map;
-        std.log.err("pos:{}|{}|{c}", .{ mapped_c, pos, map_c });
-        std.log.err("data:{x}", .{data[pos..][0..50]});
+    //const char = "\xBC#!^%";
+    _ = map;
+    //for (char) |map_c| {
+    for (0..l.numGlyphs) |idx| {
+        //const mapped_c = map.get(map_c);
+        const pos = l.get(idx);
+        //const map_c = idx;
+        //std.log.err("pos:{}|{}|{c}", .{ mapped_c, pos, map_c });
+        //std.log.err("data:{x}", .{data[pos..][0..50]});
         var reader = util.Reader{ .data = data[pos..] };
         const header = try reader.read(glyf_header);
-        std.log.err("{}", .{header});
         if (header.numberOfContours > 0) {
             const ends = try reader.takeBytes(@intCast(2 * header.numberOfContours));
             const end_pt = std.mem.readVarInt(u16, ends[@intCast(2 * (header.numberOfContours - 1))..][0..2], .big);
 
             const ins_length = try reader.read(u16);
             const ins = try reader.takeBytes(ins_length);
+            //std.debug.assert(ins_length == 0);
+            _ = ins;
             var flag_iter = FlagIter{ .flags = reader.data[reader.idx..] };
             const end_of_flags = flag_iter.total_offset(end_pt);
             _ = try reader.takeBytes(end_of_flags.flag_end);
             const x_s = try reader.takeBytes(end_of_flags.xCoordend);
             const y_s = reader.data[reader.idx..];
             //std.log.err("`{x}` `{x}`", .{ x_s, y_s });
-            std.log.err("[{}]{x}[{}]", .{ ins_length, ins, end_of_flags });
+            //std.log.err("[{}]{x}[{}]", .{ ins_length, ins, end_of_flags });
             var pt = PointIter{
                 .flag = flag_iter,
                 .x_data = x_s,
@@ -212,22 +213,43 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
             };
             while (pt.get_curve()) |curve| {
                 for (curve, 0..) |c, c_idx| {
-                    std.log.err("[{}]{}", .{ c_idx, c });
+                    //std.log.err("[{}]{}", .{ c_idx, c });
+                    _ = c;
+                    _ = c_idx;
                 }
             }
-            std.log.err("y_used {}", .{pt.y_idx});
+            //std.log.err("y_used {}", .{pt.y_idx});
         } else if (header.numberOfContours == -1) {
             const flags = try reader.read(CompositeFlag);
             const index = try reader.read(u16);
-            std.log.err("{} {}", .{ flags, index });
+
+            _ = index;
+            //std.log.info("{} {}", .{ flags, index });
             const arg1 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
             const arg2 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
-            if (flags.we_have_a_scale) {} else if (flags.we_have_an_x_and_y_scale) {} else if (flags.we_have_a_two_by_two) {}
-            std.log.err("arg1:{} arg2:{}", .{ arg1, arg2 });
-            std.log.err("arg1:{} arg2:{}", .{ @as(i16, @bitCast(arg1)), @as(i16, @bitCast(arg2)) });
-            unreachable;
+            _ = arg1;
+            _ = arg2;
+            //std.log.info("{}|{}", .{ arg1, arg2 });
+            if (flags.we_have_a_scale) {
+                const scale = try reader.read(util.F2DOT14);
+
+                std.log.err("{}", .{header});
+                _ = scale;
+                unreachable;
+            } else if (flags.we_have_an_x_and_y_scale) {
+                const scale_x = try reader.read(util.F2DOT14);
+                const scale_y = try reader.read(util.F2DOT14);
+                //std.log.err("scale:x|{}|y|{}", .{ scale_x, scale_y });
+                _ = scale_x;
+                std.log.err("{}", .{header});
+                _ = scale_y;
+                unreachable;
+            } else if (flags.we_have_a_two_by_two) {
+                std.log.err("{}", .{header});
+                unreachable;
+            }
         } else {}
-        std.log.err("Used: {}", .{reader.idx});
+        //std.log.err("Used: {}", .{reader.idx});
     }
 
     return .{};

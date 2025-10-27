@@ -103,7 +103,10 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator) !cmap {
 
         switch (subtable.format) {
             4 => try parse_v4(data[rec.subtableOffset..][0..subtable.length], &ret),
-            else => return error.Unknown,
+            else => {
+                std.log.err("Subtable:{}", .{subtable});
+                return error.Unknown;
+            },
         }
     }
     return ret;

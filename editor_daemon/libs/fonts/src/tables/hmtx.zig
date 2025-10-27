@@ -17,14 +17,16 @@ pub fn decode(
     for (0..h.numberOfHMetrics) |idx| {
         const offset = util.packedSize(LongHorMetric) * idx;
         const met = try util.read(LongHorMetric, data[offset..]);
-        std.log.debug("{}", .{met});
+        //std.log.debug("{}", .{met});
+        _ = met;
     }
     if (h.numberOfHMetrics < m.numGlyphs) {
         const offset = util.packedSize(LongHorMetric) * h.numberOfHMetrics;
         for (0..(m.numGlyphs - h.numberOfHMetrics)) |idx| {
             const pos = @sizeOf(util.FWORD) * idx + offset;
             const lsb = try util.read(util.FWORD, data[pos..]);
-            std.log.debug("{}", .{lsb});
+            //std.log.debug("{}", .{lsb});
+            _ = lsb;
         }
     }
     return .{};
