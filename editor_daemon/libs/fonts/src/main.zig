@@ -1,6 +1,43 @@
 const std = @import("std");
 const ttf = @import("ttf.zig");
 
+pub const std_options: std.Options = .{
+    // Set the log level to info
+    .log_level = .info,
+
+    // Define logFn to override the std implementation
+    .logFn = myLogFn,
+};
+
+var log_writer: ?*std.Io.Writer = null;
+var log_lock: std.Thread.Mutex = .{};
+
+pub fn myLogFn(
+    comptime level: std.log.Level,
+    comptime scope: @Type(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    // Ignore all non-error logging from sources other than
+    // .my_project, .nice_library and the default
+    const scope_prefix = "(" ++ switch (scope) {
+        .my_project, .nice_library, std.log.default_log_scope => @tagName(scope),
+        else => if (@intFromEnum(level) <= @intFromEnum(std.log.Level.err))
+            @tagName(scope)
+        else
+            return,
+    } ++ "): ";
+
+    const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
+
+    // Print the message to stderr, silently ignoring any errors
+    log_lock.lock();
+    defer log_lock.unlock();
+    if (log_writer) |lw| {
+        nosuspend lw.print(prefix ++ format ++ "\n", args) catch return;
+    }
+}
+
 const files = [_][]const u8{
     "../examples/Roboto/static/Roboto-BlackItalic.ttf",
     "../examples/Roboto/static/Roboto-Black.ttf",
@@ -142,40 +179,53 @@ fn u32totag(val: u32) [4]u8 {
         @truncate(val >> 24),
     };
 }
-
+const Counter = struct {
+    name: u32,
+    count: usize,
+    fn lessThan(_: u32, lhs: Counter, rhs: Counter) bool {
+        return lhs.count > rhs.count;
+    }
+};
 pub fn main() !void {
     var dir = std.fs.cwd();
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
+    var lw = std.Io.Writer.Allocating.init(alloc);
+    defer lw.deinit();
+    log_writer = &lw.writer;
     const names = try get_all_fonts(alloc);
     defer {
         for (names) |n| alloc.free(n);
         alloc.free(names);
     }
-    var tables = std.AutoArrayHashMap(u32, usize).init(alloc);
+    var tables = std.array_list.Managed(Counter).init(alloc);
     defer tables.deinit();
 
     for (names) |f| {
+        defer lw.clearRetainingCapacity();
         const file_data = try dir.readFileAlloc(f, alloc, .unlimited);
         defer alloc.free(file_data);
         //std.log.info("{s} => {}", .{ f, file_data.len });
         const headers = ttf.parseHeader(file_data, alloc) catch continue;
         defer headers.deinit(alloc);
-        for (headers.tables) |t| {
-            if (tables.getPtr(tagtou32(t.name))) |val| {
-                val.* += 1;
-            } else {
-                try tables.put(tagtou32(t.name), 1);
+        header_loop: for (headers.tables) |t| {
+            const id = tagtou32(t.name);
+            for (tables.items) |*i| {
+                if (i.name == id) {
+                    i.count += 1;
+                    continue :header_loop;
+                }
             }
+            try tables.append(.{ .name = id, .count = 1 });
         }
-        //ttf.parse_file(file_data, alloc) catch {
-        //std.log.err("Failure in {s}", .{f});
-        //continue;
-        //};
+        ttf.parse_file(file_data, alloc) catch {
+            std.log.err("Failure in {s}", .{f});
+            continue;
+        };
     }
-    var iter = tables.iterator();
-    while (iter.next()) |item| {
-        std.log.err("{s} => {}", .{ u32totag(item.key_ptr.*), item.value_ptr.* });
+    std.mem.sort(Counter, tables.items, @as(u32, 0), Counter.lessThan);
+    for (tables.items) |i| {
+        std.log.err("{s} => {}", .{ u32totag(i.name), i.count });
     }
 }

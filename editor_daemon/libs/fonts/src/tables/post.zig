@@ -14,5 +14,7 @@ pub const post = struct {
 };
 
 pub fn decode(data: []const u8) !post {
-    return try util.read(post, data);
+    const ret = try util.read(post, data);
+
+    return ret;
 }
