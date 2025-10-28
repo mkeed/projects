@@ -27,7 +27,7 @@ pub fn decode(data: []const u8) !name {
 
         const storage_offset = n.storageOffset + record.stringOffset;
         const string = data[storage_offset..][0..record.length];
-        if (string.len < 1000) {
+        if (string.len < 500) {
             for (0..string.len / 2) |utf8_idx| {
                 utf16_le_arr[utf8_idx] = std.mem.readVarInt(u16, string[utf8_idx * 2 ..][0..2], .big);
             }

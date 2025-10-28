@@ -113,7 +113,7 @@ const PointIter = struct {
         self.points.clearRetainingCapacity();
         if (self.contour_iter.next_pt()) |p| {
             for (0..p) |_| {
-                const n = self.next().?;
+                const n = self.next() orelse break;
 
                 self.points.appendAssumeCapacity(n.p);
             }
@@ -160,6 +160,7 @@ const PointIter = struct {
             }
             self.prev_x = x;
             self.prev_y = y;
+
             return .{
                 .p = .{
                     .x = x,
@@ -178,14 +179,19 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
     try contour_points.ensureTotalCapacity(alloc, m.maxPoints);
 
     defer contour_points.deinit(alloc);
-    //const char = "\xBC#!^%";
-    _ = map;
-    //for (char) |map_c| {
+    var composite_points = std.ArrayList(CompositeGlyf.SubGlyf){};
+    defer composite_points.deinit(alloc);
+    try composite_points.ensureTotalCapacity(alloc, m.maxCompositePoints);
+
     for (0..l.numGlyphs) |idx| {
-        //const mapped_c = map.get(map_c);
         const pos = l.get(idx);
+        var utf8_buf: [32]u8 = undefined;
+
+        const unicode_id: u21 = @intCast(map.revMap(@intCast(idx)) orelse '?');
+        const len = try std.unicode.utf8Encode(unicode_id, &utf8_buf);
+
         //const map_c = idx;
-        //std.log.err("pos:{}|{}|{c}", .{ mapped_c, pos, map_c });
+        //std.log.err("pos:{}|{}|{x}|{s}|{x}", .{ 0, pos, idx, utf8_buf[0..len], unicode_id });
         //std.log.err("data:{x}", .{data[pos..][0..50]});
         var reader = util.Reader{ .data = data[pos..] };
         const header = try reader.read(glyf_header);
@@ -197,6 +203,7 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
             const ins = try reader.takeBytes(ins_length);
             //std.debug.assert(ins_length == 0);
             _ = ins;
+            const start_flag = reader.idx;
             var flag_iter = FlagIter{ .flags = reader.data[reader.idx..] };
             const end_of_flags = flag_iter.total_offset(end_pt);
             _ = try reader.takeBytes(end_of_flags.flag_end);
@@ -205,7 +212,7 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
             //std.log.err("`{x}` `{x}`", .{ x_s, y_s });
             //std.log.err("[{}]{x}[{}]", .{ ins_length, ins, end_of_flags });
             var pt = PointIter{
-                .flag = flag_iter,
+                .flag = FlagIter{ .flags = reader.data[start_flag..][0..end_of_flags.flag_end] },
                 .x_data = x_s,
                 .y_data = y_s,
                 .points = &contour_points,
@@ -220,40 +227,70 @@ pub fn decode(data: []const u8, alloc: std.mem.Allocator, l: loca, m: maxp, map:
             }
             //std.log.err("y_used {}", .{pt.y_idx});
         } else if (header.numberOfContours == -1) {
+            composite_points.clearRetainingCapacity();
             const flags = try reader.read(CompositeFlag);
             const index = try reader.read(u16);
 
-            _ = index;
             //std.log.info("{} {}", .{ flags, index });
-            const arg1 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
-            const arg2 = if (flags.arg_1_and_2_are_words) try reader.read(u16) else try reader.read(u8);
-            _ = arg1;
-            _ = arg2;
-            //std.log.info("{}|{}", .{ arg1, arg2 });
-            if (flags.we_have_a_scale) {
-                const scale = try reader.read(util.F2DOT14);
+            const arg1: i16 = if (flags.arg_1_and_2_are_words) try reader.read(i16) else try reader.read(u8);
+            const arg2: i16 = if (flags.arg_1_and_2_are_words) try reader.read(i16) else try reader.read(u8);
 
-                std.log.err("{}", .{header});
-                _ = scale;
-                unreachable;
-            } else if (flags.we_have_an_x_and_y_scale) {
-                const scale_x = try reader.read(util.F2DOT14);
-                const scale_y = try reader.read(util.F2DOT14);
-                //std.log.err("scale:x|{}|y|{}", .{ scale_x, scale_y });
-                _ = scale_x;
-                std.log.err("{}", .{header});
-                _ = scale_y;
-                unreachable;
-            } else if (flags.we_have_a_two_by_two) {
-                std.log.err("{}", .{header});
-                unreachable;
+            //std.log.info("{}|{}", .{ arg1, arg2 });
+            const scale: ?CompositeGlyf.Scale = if (flags.we_have_a_scale) .{
+                .single = (try reader.read(util.F2DOT14)).value,
+            } else if (flags.we_have_an_x_and_y_scale) .{
+                .dual = .{
+                    .x = (try reader.read(util.F2DOT14)).value,
+                    .y = (try reader.read(util.F2DOT14)).value,
+                },
+            } else if (flags.we_have_a_two_by_two) .{ .affine = .{
+                .x = (try reader.read(util.F2DOT14)).value,
+                .@"01" = (try reader.read(util.F2DOT14)).value,
+                .@"10" = (try reader.read(util.F2DOT14)).value,
+                .y = (try reader.read(util.F2DOT14)).value,
+            } } else null;
+            if (scale) |s| {
+                std.log.err("{}|{}|{}|{}|{}", .{ s, arg1, arg2, index, len });
             }
+            try composite_points.append(alloc, .{
+                .base = index,
+                .x = arg1,
+                .y = arg2,
+                .scale = scale,
+            });
         } else {}
         //std.log.err("Used: {}", .{reader.idx});
     }
 
     return .{};
 }
+
+const CompositeGlyf = struct {
+    sub_glyfs: []const SubGlyf,
+    pub const SubGlyf = struct {
+        base: u32,
+        x: i16,
+        y: i16,
+        scale: ?Scale,
+    };
+    pub const Scale = union(enum) {
+        single: f32,
+        dual: struct { x: f32, y: f32 },
+        affine: Affine,
+    };
+    pub const Affine = struct {
+        x: f32,
+        @"01": f32,
+        @"10": f32,
+        y: f32,
+        pub fn transform(self: Affine, x: f32, y: f32) struct { x: f32, y: f32 } {
+            return .{
+                .x = self.x * x + self.@"10" * y,
+                .y = self.y * y + self.@"01" * x,
+            };
+        }
+    };
+};
 
 const CompositeFlag = packed struct(u16) {
     arg_1_and_2_are_words: bool,

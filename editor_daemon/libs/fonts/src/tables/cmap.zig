@@ -89,6 +89,17 @@ pub const cmap = struct {
             return 0;
         }
     }
+    pub fn revMap(self: *const cmap, code: u32) ?u32 {
+        var iter = self.map.iterator();
+        while (iter.next()) |k| {
+            for (k.value_ptr.maps, 0..) |m, idx| {
+                if (m == code) {
+                    return @intCast(k.key_ptr.* + idx);
+                }
+            }
+        }
+        return null;
+    }
 };
 
 pub fn decode(data: []const u8, alloc: std.mem.Allocator) !cmap {

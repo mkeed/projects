@@ -88,9 +88,9 @@ const files = [_][]const u8{
 
 fn get_all_fonts(alloc: std.mem.Allocator) ![]const []const u8 {
     var list = std.ArrayList([]const u8){};
-    for (files) |f| {
-        try list.append(alloc, try alloc.dupe(u8, f));
-    }
+    //for (files) |f| {
+    //try list.append(alloc, try alloc.dupe(u8, f));
+    //}
     const font_dir_name = "/usr/share/fonts";
     var dir = try std.fs.openDirAbsolute(font_dir_name, .{ .iterate = true });
     defer dir.close();
@@ -125,6 +125,24 @@ fn get_all_fonts(alloc: std.mem.Allocator) ![]const []const u8 {
     return try list.toOwnedSlice(alloc);
 }
 
+fn tagtou32(data: []const u8) u32 {
+    std.debug.assert(data.len == 4);
+    var val: u32 = 0;
+    for (data, 0..) |d, idx| {
+        val |= @as(u32, d) << @intCast(8 * idx);
+    }
+    return val;
+}
+
+fn u32totag(val: u32) [4]u8 {
+    return .{
+        @truncate(val >> 0),
+        @truncate(val >> 8),
+        @truncate(val >> 16),
+        @truncate(val >> 24),
+    };
+}
+
 pub fn main() !void {
     var dir = std.fs.cwd();
     var gpa = std.heap.DebugAllocator(.{}){};
@@ -135,10 +153,29 @@ pub fn main() !void {
         for (names) |n| alloc.free(n);
         alloc.free(names);
     }
+    var tables = std.AutoArrayHashMap(u32, usize).init(alloc);
+    defer tables.deinit();
+
     for (names) |f| {
         const file_data = try dir.readFileAlloc(f, alloc, .unlimited);
         defer alloc.free(file_data);
-        std.log.info("{s} => {}", .{ f, file_data.len });
-        try ttf.parse_file(file_data, alloc);
+        //std.log.info("{s} => {}", .{ f, file_data.len });
+        const headers = ttf.parseHeader(file_data, alloc) catch continue;
+        defer headers.deinit(alloc);
+        for (headers.tables) |t| {
+            if (tables.getPtr(tagtou32(t.name))) |val| {
+                val.* += 1;
+            } else {
+                try tables.put(tagtou32(t.name), 1);
+            }
+        }
+        //ttf.parse_file(file_data, alloc) catch {
+        //std.log.err("Failure in {s}", .{f});
+        //continue;
+        //};
+    }
+    var iter = tables.iterator();
+    while (iter.next()) |item| {
+        std.log.err("{s} => {}", .{ u32totag(item.key_ptr.*), item.value_ptr.* });
     }
 }

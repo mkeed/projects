@@ -43,7 +43,7 @@ fn calcChecksum(data: []const u8, headAdjust: bool) u32 {
     return sum;
 }
 
-fn parseHeader(data: []const u8, alloc: std.mem.Allocator) !Header {
+pub fn parseHeader(data: []const u8, alloc: std.mem.Allocator) !Header {
     const version = std.mem.readVarInt(u32, data[0..4], .big);
     const num_tables = std.mem.readVarInt(u16, data[4..][0..2], .big);
     _ = version;
