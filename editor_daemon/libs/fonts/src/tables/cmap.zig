@@ -102,17 +102,43 @@ pub const cmap = struct {
     }
 };
 
+fn best_map(data: []const u8) ?EncodingRecord {
+    const header = util.read(CmapHeader, data) catch return null;
+    for (0..header.numTables) |t| {
+        const offset = util.packedSize(CmapHeader) + t * util.packedSize(EncodingRecord);
+        const rec = util.read(EncodingRecord, data[offset..]) catch continue;
+        //const subtable = util.read(subtable_header, data[rec.subtableOffset..]) catch continue;
+        switch (rec.platformId) {
+            .unicode => {
+                if (rec.encodingId == 4) return rec;
+            },
+            else => {},
+        }
+    }
+    return null;
+}
+
 pub fn decode(data: []const u8, alloc: std.mem.Allocator) !cmap {
     var ret = cmap.init(alloc);
     errdefer ret.deinit();
     const header = try util.read(CmapHeader, data);
-    for (0..header.numTables) |t| {
-        const offset = util.packedSize(CmapHeader) + t * util.packedSize(EncodingRecord);
-        const rec = try util.read(EncodingRecord, data[offset..]);
-
+    errdefer std.log.err("{}", .{header});
+    errdefer {
+        for (0..header.numTables) |t| {
+            const offset = util.packedSize(CmapHeader) + t * util.packedSize(EncodingRecord);
+            const rec = util.read(EncodingRecord, data[offset..]) catch continue;
+            std.log.err("{}", .{rec});
+        }
+    }
+    if (best_map(data)) |rec| {
+        //for (0..header.numTables) |t| {
+        //const offset = util.packedSize(CmapHeader) + t * util.packedSize(EncodingRecord);
+        //const rec = try util.read(EncodingRecord, data[offset..]);
+        errdefer std.log.err("|{}|{}", .{ 0, rec });
         const subtable = try util.read(subtable_header, data[rec.subtableOffset..]);
 
         switch (subtable.format) {
+            0 => try parse_v0(data[rec.subtableOffset..][0..subtable.length], &ret),
             4 => try parse_v4(data[rec.subtableOffset..][0..subtable.length], &ret),
             6 => try parse_v6(data[rec.subtableOffset..][0..subtable.length], &ret),
             12 => try parse_v12(data[rec.subtableOffset..], &ret),
@@ -217,3 +243,20 @@ fn parse_v6(data: []const u8, c: *cmap) !void {
         try c.set(@intCast(header.firstCode + ec), code);
     }
 }
+
+const v0_header = struct {
+    format: u16,
+    length: u16,
+    language: u16,
+    glyphIdArray: [256]u8,
+};
+
+fn parse_v0(data: []const u8, c: *cmap) !void {
+    var reader = util.Reader{ .data = data };
+    const header = try reader.read(v0_header);
+    for (&header.glyphIdArray, 0..) |d, idx| {
+        try c.set(@intCast(idx), d);
+    }
+}
+
+//fn parse_v14(data: []const u8, c: *cmap) !void {}

@@ -20,9 +20,10 @@ pub fn decode(
         //std.log.debug("{}", .{met});
         _ = met;
     }
-    if (h.numberOfHMetrics < m.numGlyphs) {
+    const numGlyphs = if (m.v1) |v1| v1.numGlyphs else 0;
+    if (h.numberOfHMetrics < numGlyphs) {
         const offset = util.packedSize(LongHorMetric) * h.numberOfHMetrics;
-        for (0..(m.numGlyphs - h.numberOfHMetrics)) |idx| {
+        for (0..(numGlyphs - h.numberOfHMetrics)) |idx| {
             const pos = @sizeOf(util.FWORD) * idx + offset;
             const lsb = try util.read(util.FWORD, data[pos..]);
             //std.log.debug("{}", .{lsb});

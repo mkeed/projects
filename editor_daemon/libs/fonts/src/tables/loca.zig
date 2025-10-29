@@ -25,7 +25,7 @@ pub const loca = struct {
 
 pub fn decode(data: []const u8, h: head, m: maxp) !loca {
     return .{
-        .numGlyphs = m.numGlyphs,
+        .numGlyphs = if (m.v1) |v1| v1.numGlyphs else 0,
         .format = switch (h.indexToLocFormat) {
             0 => .short,
             1 => .long,

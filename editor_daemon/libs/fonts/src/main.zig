@@ -31,10 +31,16 @@ pub fn myLogFn(
     const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
 
     // Print the message to stderr, silently ignoring any errors
-    log_lock.lock();
-    defer log_lock.unlock();
+
     if (log_writer) |lw| {
+        log_lock.lock();
+        defer log_lock.unlock();
         nosuspend lw.print(prefix ++ format ++ "\n", args) catch return;
+    } else {
+        std.debug.lockStdErr();
+        defer std.debug.unlockStdErr();
+        var stderr = std.fs.File.stderr().writer(&.{});
+        nosuspend stderr.interface.print(prefix ++ format ++ "\n", args) catch return;
     }
 }
 
@@ -187,12 +193,17 @@ const Counter = struct {
     }
 };
 pub fn main() !void {
+    var stdout = std.fs.File.stdout();
+
     var dir = std.fs.cwd();
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
     var lw = std.Io.Writer.Allocating.init(alloc);
-    defer lw.deinit();
+    defer {
+        log_writer = null;
+        lw.deinit();
+    }
     log_writer = &lw.writer;
     const names = try get_all_fonts(alloc);
     defer {
@@ -201,7 +212,7 @@ pub fn main() !void {
     }
     var tables = std.array_list.Managed(Counter).init(alloc);
     defer tables.deinit();
-
+    _ = try stdout.write("Starting\n");
     for (names) |f| {
         defer lw.clearRetainingCapacity();
         const file_data = try dir.readFileAlloc(f, alloc, .unlimited);
@@ -219,13 +230,18 @@ pub fn main() !void {
             }
             try tables.append(.{ .name = id, .count = 1 });
         }
-        ttf.parse_file(file_data, alloc) catch {
-            std.log.err("Failure in {s}", .{f});
-            continue;
-        };
+        if (true) {
+            ttf.parse_file(file_data, alloc) catch |err| {
+                std.log.err("Failure in {s}|{}", .{ f, err });
+                _ = stdout.write(f) catch {};
+                _ = stdout.write(lw.written()) catch {};
+                return err;
+            };
+        }
     }
     std.mem.sort(Counter, tables.items, @as(u32, 0), Counter.lessThan);
     for (tables.items) |i| {
         std.log.err("{s} => {}", .{ u32totag(i.name), i.count });
     }
+    _ = stdout.write(lw.written()) catch {};
 }

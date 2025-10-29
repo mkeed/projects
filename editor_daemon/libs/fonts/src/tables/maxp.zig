@@ -3,6 +3,10 @@ const util = @import("../utils.zig");
 
 pub const maxp = struct {
     version: util.Version16Dot16,
+    v1: ?maxp_v1,
+};
+
+const maxp_v1 = struct {
     numGlyphs: u16,
     maxPoints: u16,
     maxContours: u16,
@@ -18,7 +22,11 @@ pub const maxp = struct {
     maxComponentElements: u16,
     maxComponentDepth: u16,
 };
-
 pub fn decode(data: []const u8) !maxp {
-    return try util.read(maxp, data);
+    var reader = util.Reader{ .data = data };
+    const version = try reader.read(util.Version16Dot16);
+    return .{
+        .version = version,
+        .v1 = if (version.major == 1 and version.minor == 0) try reader.read(maxp_v1) else null,
+    };
 }
