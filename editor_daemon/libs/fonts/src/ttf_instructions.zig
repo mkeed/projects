@@ -35,7 +35,11 @@ test {
         0x60, 0xb0, 0x20, 0x63, 0x68, 0x20, 0x8a, 0x10, 0x8a, 0x23, 0x3a, 0x8a, 0x10,
         0x65, 0x3a, 0x2d,
     };
-    try decode(prog);
+    var iter = InstructionIter{ .reader = .{ .data = prog } };
+    while (try iter.next()) |n| {
+        std.log.err("{}", .{n});
+    }
+    //try decode(prog);
 }
 
 fn decode(data: []const u8) !void {
@@ -95,11 +99,60 @@ const InstructionIter = struct {
     pub fn next(self: *InstructionIter) !?Instruction {
         if (self.reader.tryGetByte()) |ins| {
             switch (ins) {
+                0x10, 0x11, 0x12 => return .{ .set = .{ .reference_point = ins - 0x10 } },
+                0x13, 0x14, 0x15 => return .{ .set = .{ .zone_pointer = ins - 0x13 } },
+                0x16 => return .{ .set = .zone_pointers },
+                0x17 => return .{ .set = .loop_variable },
+                0x18 => return .{ .grid = .round_to_grid },
+                0x19 => return .{ .grid = .round_to_half_grid },
+                0x1A => return .{ .set = .minimum_distance },
+                0x1B => return .{ .control_flow = .@"else" },
+                0x1C => return .{ .control_flow = .jump },
+                0x2c => return .{ .function = .start },
+                0x2d => return .{ .function = .end },
+                0x20 => return .{ .stack = .dup },
+                0x21 => return .{ .stack = .pop },
+                0x22 => return .{ .stack = .clear },
+                0x23 => return .{ .stack = .swap },
+                0x25 => return .{ .stack = .copy_indexed },
+
+                0x3D => return .{ .grid = .round_to_double_grid },
+                0x44 => return .{ .control_value_table = .write_pixels },
+                0x45 => return .{ .control_value_table = .read },
+
+                //0x49 => std.log.err("Measure Distance[{}]", .{0}),
+                //0x4A => std.log.err("Measure Distance[{}]", .{1}),
+                //0x4B => std.log.err("Measure Pixels Per EM", .{}),
+                //0x64 => std.log.err("ABSolute value", .{}),
+
+                0x50 => return .{ .check = .less_than },
+                0x51 => return .{ .check = .less_than_or_equal },
+                0x52 => return .{ .check = .greater_than },
+                0x53 => return .{ .check = .greater_than_or_equal },
+                0x54 => return .{ .check = .equal },
+                0x55 => return .{ .check = .not_equal },
+                0x56 => return .{ .check = .odd },
+                0x57 => return .{ .check = .even },
+
+                0x58 => return .{ .control_flow = .if_test },
+                0x59 => return .{ .control_flow = .end_if },
+                0x5A => return .{ .check = .@"and" },
+                0x5B => return .{ .check = .@"or" },
+                0x5C => return .{ .check = .not },
+                0x70 => return .{ .control_value_table = .write_font_design_units },
+                0x76 => return .{ .grid = .super_round },
+                0x77 => return .{ .grid = .super_round_45 },
+                0x78 => return .{ .control_flow = .jump_relative_on_true },
+                0x79 => return .{ .control_flow = .jump_relative_on_false },
+                0x7A => return .{ .grid = .round_off },
+                0x7C => return .{ .grid = .round_up_to_grid },
+                0x7D => return .{ .grid = .round_down_to_grid },
+                0x8E => return .{ .ins = .instruction_execution_control },
                 0xb0...0xb7 => {
                     const num_b = ins - 0xb0 + 1;
                     var bytes = std.mem.zeroes([8]u8);
                     for (0..num_b) |idx| {
-                        bytes[idx] = try reader.read(u8);
+                        bytes[idx] = try self.reader.read(u8);
                     }
                     return .{ .pushb = .{ .num = num_b, .bytes = bytes } };
                 },
@@ -107,35 +160,18 @@ const InstructionIter = struct {
                     const num_b = ins - 0xb8 + 1;
                     var bytes = std.mem.zeroes([8]u16);
                     for (0..num_b) |idx| {
-                        bytes[idx] = try reader.read(u16);
+                        bytes[idx] = try self.reader.read(u16);
                     }
                     return .{ .pushw = .{ .num = num_b, .bytes = bytes } };
                 }, //PUSHW
-                0x2c => std.log.err("Start function", .{}),
-                0x2d => std.log.err("end Function", .{}),
-                0x20 => std.log.err("DUPlicate", .{}),
-                0x21 => std.log.err("Pop", .{}),
-                0x23 => std.log.err("SWAP", .{}),
-                0x10 => std.log.err("Set Reference Point 0", .{}),
-                0x25 => std.log.err("Copy INDEXed element", .{}),
-                0x44 => std.log.err("Write Control Value Table in Pixel units", .{}),
-                0x45 => std.log.err("Read Control Value Table", .{}),
-                0x49 => std.log.err("Measure Distance[{}]", .{0}),
-                0x4A => std.log.err("Measure Distance[{}]", .{1}),
-                0x4B => std.log.err("Measure Pixels Per EM", .{}),
-                0x64 => std.log.err("ABSolute value", .{}),
-                0x50 => std.log.err("Less than", .{}),
-                0x51 => std.log.err("Less than Or Equal", .{}),
-                0x52 => std.log.err("Greated than", .{}),
-
-                0x58 => std.log.err("IF test", .{}),
-                0x59 => std.log.err("End IF", .{}),
-                0x1b => std.log.err("Else", .{}),
-                0x1c => std.log.err("Jump", .{}),
-                0x79 => std.log.err("Jump Relative On False", .{}),
-                0xC0...0xDF => std.log.err("Move Direct Relative Point", .{}),
-                0xE0...0xFF => std.log.err("Move Indirect Relative Point", .{}),
+                //0xC0...0xDF => std.log.err("Move Direct Relative Point", .{}),
+                //0xE0...0xFF => std.log.err("Move Indirect Relative Point", .{}),
+                else => {
+                    std.log.err("Unhandled ins:{x}", .{ins});
+                    return error.TODO;
+                },
             }
+            unreachable;
         } else {
             return null;
         }
@@ -146,4 +182,51 @@ const Instruction = union(enum) {
     pushb: struct { num: u8, bytes: [8]u8 },
     pushw: struct { num: u8, bytes: [8]u16 },
     function: enum { start, end },
+    stack: enum { pop, swap, dup, clear, copy_indexed },
+    set: union(enum) {
+        reference_point: u8,
+        zone_pointer: u8,
+        zone_pointers: void,
+        loop_variable: void,
+        minimum_distance: void,
+    },
+    grid: enum {
+        round_to_half_grid,
+        round_to_grid,
+        round_to_double_grid,
+        round_down_to_grid,
+        round_up_to_grid,
+        round_off,
+        super_round,
+        super_round_45,
+    },
+    ins: enum {
+        instruction_execution_control,
+    },
+    check: enum {
+        less_than,
+        less_than_or_equal,
+        greater_than,
+        greater_than_or_equal,
+        equal,
+        not_equal,
+        odd,
+        even,
+        @"and",
+        @"or",
+        not,
+    },
+    control_flow: enum {
+        if_test,
+        @"else",
+        end_if,
+        jump,
+        jump_relative_on_true,
+        jump_relative_on_false,
+    },
+    control_value_table: enum {
+        write_pixels,
+        write_font_design_units,
+        read,
+    },
 };
