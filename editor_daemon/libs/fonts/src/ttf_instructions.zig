@@ -98,13 +98,16 @@ const InstructionIter = struct {
 
     pub fn next(self: *InstructionIter) !?Instruction {
         if (self.reader.tryGetByte()) |ins| {
+            errdefer std.log.err("Unhandled ins:{x}", .{ins});
             switch (ins) {
+                0x00, 0x01, 0x02, 0x03 => return error.TODO,
                 0x04 => return .{ .set = .{ .freedom_vector = .y } },
                 0x05 => return .{ .set = .{ .freedom_vector = .x } },
                 0x06 => return .{ .set = .{ .projection_vector = .parallel } },
                 0x07 => return .{ .set = .{ .projection_vector = .perpendicular } },
                 0x08 => return .{ .set = .{ .freedom_vector_line = .parallel } },
                 0x09 => return .{ .set = .{ .freedom_vector_line = .perpendicular } },
+                0x0A...0x0F => return error.TODO,
                 0x10, 0x11, 0x12 => return .{ .set = .{ .reference_point = ins - 0x10 } },
                 0x13, 0x14, 0x15 => return .{ .set = .{ .zone_pointer = ins - 0x13 } },
                 0x16 => return .{ .set = .zone_pointers },
@@ -114,30 +117,40 @@ const InstructionIter = struct {
                 0x1A => return .{ .set = .minimum_distance },
                 0x1B => return .{ .control_flow = .@"else" },
                 0x1C => return .{ .control_flow = .jump },
-                0x2c => return .{ .function = .start },
-                0x2d => return .{ .function = .end },
+                0x1D, 0x1E, 0x1F => return error.TODO,
+
                 0x20 => return .{ .stack = .dup },
                 0x21 => return .{ .stack = .pop },
                 0x22 => return .{ .stack = .clear },
                 0x23 => return .{ .stack = .swap },
-                0x25 => return .{ .stack = .copy_indexed },
 
+                0x24 => return error.TODO,
+
+                0x25 => return .{ .stack = .copy_indexed },
+                0x26...0x2B => return error.TODO,
+                0x2c => return .{ .function = .start },
+                0x2d => return .{ .function = .end },
+
+                0x2E...0x39 => return error.TODO,
+                0x3A => return .{ .move_stack_indirect_relative_point = .{ .set_rp0 = false } },
+                0x3B => return .{ .move_stack_indirect_relative_point = .{ .set_rp0 = true } },
+
+                0x3C => return error.TODO,
                 0x3D => return .{ .grid = .round_to_double_grid },
+
+                0x3E...0x43 => return error.TODO,
+
                 0x44 => return .{ .control_value_table = .write_pixels },
                 0x45 => return .{ .control_value_table = .read },
+
+                0x46...0x48 => return error.TODO,
 
                 0x49 => return .{ .measure = .{ .distance = 0 } },
                 0x4A => return .{ .measure = .{ .distance = 1 } },
                 0x4B => return .{ .measure = .pixels_per_em },
                 0x4C => return .{ .measure = .point_size },
-                0x60 => return .{ .math = .add },
-                0x61 => return .{ .math = .sub },
-                0x62 => return .{ .math = .div },
-                0x63 => return .{ .math = .mul },
-                0x64 => return .{ .math = .abs },
-                0x65 => return .{ .math = .neg },
-                0x66 => return .{ .math = .floor },
-                0x67 => return .{ .math = .ceiling },
+
+                0x4D...0x4F => return error.TODO,
 
                 0x50 => return .{ .check = .less_than },
                 0x51 => return .{ .check = .less_than_or_equal },
@@ -147,23 +160,50 @@ const InstructionIter = struct {
                 0x55 => return .{ .check = .not_equal },
                 0x56 => return .{ .check = .odd },
                 0x57 => return .{ .check = .even },
-
                 0x58 => return .{ .control_flow = .if_test },
                 0x59 => return .{ .control_flow = .end_if },
                 0x5A => return .{ .check = .@"and" },
                 0x5B => return .{ .check = .@"or" },
                 0x5C => return .{ .check = .not },
+
+                0x5D...0x5F => return error.TODO,
+
+                0x60 => return .{ .math = .add },
+                0x61 => return .{ .math = .sub },
+                0x62 => return .{ .math = .div },
+                0x63 => return .{ .math = .mul },
+                0x64 => return .{ .math = .abs },
+                0x65 => return .{ .math = .neg },
+                0x66 => return .{ .math = .floor },
+                0x67 => return .{ .math = .ceiling },
+                0x68 => return .{ .round = .gray },
+                0x69 => return .{ .round = .black },
+                0x6A => return .{ .round = .white },
+
+                0x6B...0x6F => return error.TODO,
+
                 0x70 => return .{ .control_value_table = .write_font_design_units },
+
+                0x71...0x75 => return error.TODO,
+
                 0x76 => return .{ .grid = .super_round },
                 0x77 => return .{ .grid = .super_round_45 },
                 0x78 => return .{ .control_flow = .jump_relative_on_true },
                 0x79 => return .{ .control_flow = .jump_relative_on_false },
                 0x7A => return .{ .grid = .round_off },
+                0x7B => return error.TODO,
                 0x7C => return .{ .grid = .round_up_to_grid },
                 0x7D => return .{ .grid = .round_down_to_grid },
+
+                0x7E...0x89 => return error.TODO,
+                0x8A => return .{ .stack = .roll },
                 0x8B => return .{ .math = .max },
                 0x8C => return .{ .math = .min },
+                0x8D => return error.TODO,
                 0x8E => return .{ .ins = .instruction_execution_control },
+
+                0x8F...0xAF => return error.TODO,
+
                 0xb0...0xb7 => {
                     const num_b = ins - 0xb0 + 1;
                     var bytes = std.mem.zeroes([8]u8);
@@ -212,10 +252,6 @@ const InstructionIter = struct {
                         },
                     };
                 },
-                else => {
-                    std.log.err("Unhandled ins:{x}", .{ins});
-                    return error.TODO;
-                },
             }
             unreachable;
         } else {
@@ -228,7 +264,7 @@ const Instruction = union(enum) {
     pushb: struct { num: u8, bytes: [8]u8 },
     pushw: struct { num: u8, bytes: [8]u16 },
     function: enum { start, end },
-    stack: enum { pop, swap, dup, clear, copy_indexed },
+    stack: enum { pop, swap, dup, clear, copy_indexed, roll },
     set: union(enum) {
         reference_point: u8,
         zone_pointer: u8,
@@ -248,6 +284,11 @@ const Instruction = union(enum) {
         round_off,
         super_round,
         super_round_45,
+    },
+    round: enum {
+        gray,
+        black,
+        white,
     },
     ins: enum {
         instruction_execution_control,
@@ -294,6 +335,9 @@ const Instruction = union(enum) {
         ceiling,
         max,
         min,
+    },
+    move_stack_indirect_relative_point: struct {
+        set_rp0: bool,
     },
     move_relative_point: struct {
         direct: enum { direct, indirect },

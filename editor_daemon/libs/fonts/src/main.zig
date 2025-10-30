@@ -230,7 +230,7 @@ pub fn main() !void {
             }
             try tables.append(.{ .name = id, .count = 1 });
         }
-        if (true) {
+        if (false) {
             ttf.parse_file(file_data, alloc) catch |err| {
                 std.log.err("Failure in {s}|{}", .{ f, err });
                 _ = stdout.write(f) catch {};

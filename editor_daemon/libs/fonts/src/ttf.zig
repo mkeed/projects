@@ -89,7 +89,6 @@ pub fn parse_file(file: []const u8, alloc: std.mem.Allocator) !void {
     const glyf = try @import("tables/glyf.zig").decode(header.get("glyf") orelse unreachable, alloc, loca, m, &cmap);
     if (header.get("fpgm")) |fpgm| {
         std.log.err("fpgm|{x}", .{fpgm});
-        return error.TODO;
     }
     _ = glyf;
     _ = hmtx;
