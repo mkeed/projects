@@ -99,6 +99,12 @@ const InstructionIter = struct {
     pub fn next(self: *InstructionIter) !?Instruction {
         if (self.reader.tryGetByte()) |ins| {
             switch (ins) {
+                0x04 => return .{ .set = .{ .freedom_vector = .y } },
+                0x05 => return .{ .set = .{ .freedom_vector = .x } },
+                0x06 => return .{ .set = .{ .projection_vector = .parallel } },
+                0x07 => return .{ .set = .{ .projection_vector = .perpendicular } },
+                0x08 => return .{ .set = .{ .freedom_vector_line = .parallel } },
+                0x09 => return .{ .set = .{ .freedom_vector_line = .perpendicular } },
                 0x10, 0x11, 0x12 => return .{ .set = .{ .reference_point = ins - 0x10 } },
                 0x13, 0x14, 0x15 => return .{ .set = .{ .zone_pointer = ins - 0x13 } },
                 0x16 => return .{ .set = .zone_pointers },
@@ -120,10 +126,18 @@ const InstructionIter = struct {
                 0x44 => return .{ .control_value_table = .write_pixels },
                 0x45 => return .{ .control_value_table = .read },
 
-                //0x49 => std.log.err("Measure Distance[{}]", .{0}),
-                //0x4A => std.log.err("Measure Distance[{}]", .{1}),
-                //0x4B => std.log.err("Measure Pixels Per EM", .{}),
-                //0x64 => std.log.err("ABSolute value", .{}),
+                0x49 => return .{ .measure = .{ .distance = 0 } },
+                0x4A => return .{ .measure = .{ .distance = 1 } },
+                0x4B => return .{ .measure = .pixels_per_em },
+                0x4C => return .{ .measure = .point_size },
+                0x60 => return .{ .math = .add },
+                0x61 => return .{ .math = .sub },
+                0x62 => return .{ .math = .div },
+                0x63 => return .{ .math = .mul },
+                0x64 => return .{ .math = .abs },
+                0x65 => return .{ .math = .neg },
+                0x66 => return .{ .math = .floor },
+                0x67 => return .{ .math = .ceiling },
 
                 0x50 => return .{ .check = .less_than },
                 0x51 => return .{ .check = .less_than_or_equal },
@@ -147,6 +161,8 @@ const InstructionIter = struct {
                 0x7A => return .{ .grid = .round_off },
                 0x7C => return .{ .grid = .round_up_to_grid },
                 0x7D => return .{ .grid = .round_down_to_grid },
+                0x8B => return .{ .math = .max },
+                0x8C => return .{ .math = .min },
                 0x8E => return .{ .ins = .instruction_execution_control },
                 0xb0...0xb7 => {
                     const num_b = ins - 0xb0 + 1;
@@ -164,8 +180,38 @@ const InstructionIter = struct {
                     }
                     return .{ .pushw = .{ .num = num_b, .bytes = bytes } };
                 }, //PUSHW
-                //0xC0...0xDF => std.log.err("Move Direct Relative Point", .{}),
-                //0xE0...0xFF => std.log.err("Move Indirect Relative Point", .{}),
+                0xC0...0xDF => {
+                    return .{
+                        .move_relative_point = .{
+                            .direct = .direct,
+                            .set_rp0 = (ins & 0x1) != 0,
+                            .keep_distance_greater = (ins & 0x2) != 0,
+                            .round_distance = (ins & 0x4) != 0,
+                            .distance = switch (@as(u2, @truncate(ins >> 3))) {
+                                0 => .gray,
+                                1 => .black,
+                                2 => .white,
+                                else => return error.BadInstruction,
+                            },
+                        },
+                    };
+                },
+                0xE0...0xFF => {
+                    return .{
+                        .move_relative_point = .{
+                            .direct = .indirect,
+                            .set_rp0 = (ins & 0x1) != 0,
+                            .keep_distance_greater = (ins & 0x2) != 0,
+                            .round_distance = (ins & 0x4) != 0,
+                            .distance = switch (@as(u2, @truncate(ins >> 3))) {
+                                0 => .gray,
+                                1 => .black,
+                                2 => .white,
+                                else => return error.BadInstruction,
+                            },
+                        },
+                    };
+                },
                 else => {
                     std.log.err("Unhandled ins:{x}", .{ins});
                     return error.TODO;
@@ -189,6 +235,9 @@ const Instruction = union(enum) {
         zone_pointers: void,
         loop_variable: void,
         minimum_distance: void,
+        freedom_vector: enum { x, y },
+        freedom_vector_line: enum { parallel, perpendicular },
+        projection_vector: enum { parallel, perpendicular },
     },
     grid: enum {
         round_to_half_grid,
@@ -228,5 +277,29 @@ const Instruction = union(enum) {
         write_pixels,
         write_font_design_units,
         read,
+    },
+    measure: union(enum) {
+        distance: u8,
+        pixels_per_em: void,
+        point_size: void,
+    },
+    math: enum {
+        abs,
+        add,
+        sub,
+        div,
+        mul,
+        neg,
+        floor,
+        ceiling,
+        max,
+        min,
+    },
+    move_relative_point: struct {
+        direct: enum { direct, indirect },
+        set_rp0: bool,
+        keep_distance_greater: bool,
+        round_distance: bool,
+        distance: enum { gray, black, white },
     },
 };
