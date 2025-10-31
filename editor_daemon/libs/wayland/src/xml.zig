@@ -1,327 +1,175 @@
 const std = @import("std");
 const xmlOpenToken = "<?";
-const xmlCloseToken = ">";
+const xmlCloseToken = "?>";
 
 const commentOpen = "<!--";
 const commentClose = "-->";
 
+const cdataOpen = "<![CDATA[";
+const cdataClose = "]]>";
+
 const openTag = "<";
 const openCloseTag = "</";
 
-const xmlTag = struct {
-    name: []const u8,
-    val: []const u8,
-};
+pub const Version = enum { v1_0, v1_1 };
+pub const Encoding = enum { utf8 };
 
-const XMLContents = union(enum) {
-    str: []const u8,
-    node: *XMLNode,
-};
-pub const XMLNode = struct {
+pub const XMLDoc = struct {
+    version: ?Version,
+    encoding: ?Encoding,
     alloc: std.mem.Allocator,
-    parent: ?*XMLNode,
-    name: []const u8,
-    tags: std.array_list.Managed(xmlTag),
-    contents: std.array_list.Managed(XMLContents),
-    fn print_indent(num: usize) void {
-        var count: usize = 0;
-        while (count < num) : (count += 1) {
-            std.debug.print(" ", .{});
-        }
-    }
-    pub fn print(self: *XMLNode, indent: usize) void {
-        print_indent(indent);
-        std.debug.print("start=>[{s}]\n", .{self.name});
-        for (self.tags.items) |val| {
-            print_indent(indent);
-            std.debug.print("arg[{s}] => [{s}]\n", .{ val.name, val.val });
-        }
-        for (self.contents.items) |content| {
-            switch (content) {
-                .str => |val| {
-                    print_indent(indent + 1);
-                    std.debug.print("{s}\n", .{val});
-                },
-                .node => |n| {
-                    n.print(indent + 1);
-                },
-            }
-        }
-        print_indent(indent);
-        std.debug.print("end=>[{s}]\n", .{self.name});
-    }
-    pub fn deinit(self: *XMLNode) void {
-        self.tags.deinit();
-        for (self.contents.items) |c| {
-            switch (c) {
-                .node => |n| {
-                    n.deinit();
-                    //self.alloc.destroy(n);
-                },
-                else => {},
-            }
-        }
-        self.contents.deinit();
-        self.alloc.destroy(self);
-    }
-
-    const GetNodesError = error{
-        AllocError,
+    elements: []Element,
+    pub const ElementIdx = u32;
+    pub const Element = union(enum) {
+        sub: struct {
+            parent: ?ElementIdx,
+            sub_elements: []const ElementIdx,
+            attrs: []const Attribute,
+        },
+        text: []const u8,
     };
-    pub fn getTag(self: *XMLNode, name: []const u8) ?[]const u8 {
-        for (self.tags.items) |tag| {
-            if (std.mem.eql(u8, name, tag.name)) {
-                return tag.val;
-            }
-        }
-        return null;
-    }
-
-    pub const NodesIterator = struct {
-        root: *XMLNode,
-        query: []const []const u8,
-        curNode: ?*XMLNode = null,
-        pub fn next(self: *NodesIterator) ?*XMLNode {
-            var curNode = self.root;
-            var queryIdx: usize = 0;
-            var nodeIdx: usize = 0;
-            if (self.curNode) |cn| {
-                queryIdx = self.query.len - 1;
-                if (cn.parent) |p| {
-                    for (p.contents.items, 0..) |c, idx| {
-                        switch (c) {
-                            .node => |n| {
-                                if (n == cn) {
-                                    nodeIdx = idx + 1;
-                                    break;
-                                }
-                            },
-                            else => {},
-                        }
-                    }
-                    curNode = p;
-                } else {
-                    self.curNode = null;
-                    return null;
-                }
-            }
-            queryLoop: while (queryIdx < self.query.len) {
-                while (nodeIdx < curNode.contents.items.len) : (nodeIdx += 1) {
-                    switch (curNode.contents.items[nodeIdx]) {
-                        .node => |node| {
-                            if (std.mem.eql(u8, self.query[queryIdx], node.name)) {
-                                curNode = node;
-                                queryIdx += 1;
-                                if (queryIdx == self.query.len) {
-                                    self.curNode = curNode;
-                                    return curNode;
-                                }
-                                nodeIdx = 0;
-                                continue :queryLoop;
-                            }
-                        },
-                        else => {},
-                    }
-                }
-                if (queryIdx == 0) {
-                    self.curNode = null;
-                    return null;
-                }
-                queryIdx -= 1;
-                if (curNode.parent) |p| {
-                    for (p.contents.items, 0..) |c, idx| {
-                        switch (c) {
-                            .node => |n| {
-                                if (n == curNode) {
-                                    nodeIdx = idx + 1;
-                                }
-                            },
-                            else => {},
-                        }
-                        curNode = p;
-                    }
-                } else {
-                    self.curNode = null;
-                    return null;
-                }
-            }
-            self.curNode = null;
-            return null;
-        }
-    };
-
-    pub fn nodesIter(self: *XMLNode, query: []const []const u8) NodesIterator {
-        return .{ .root = self, .query = query };
-    }
-
-    pub fn getSingleNode(self: *XMLNode, name: []const u8) ?*XMLNode {
-        for (self.contents.items) |i| {
-            switch (i) {
-                .node => |n| {
-                    if (std.mem.eql(u8, n.name, name)) {
-                        return n;
-                    }
-                },
-                else => {},
-            }
-        }
-        return null;
-    }
-
-    pub fn getNodes(self: *XMLNode, nodes: *std.array_list.Managed(*XMLNode), queries: []const []const u8) !void {
-        var iter = self.nodesIter(queries);
-
-        while (iter.next()) |node| {
-            try nodes.append(node);
-        }
+    pub fn deinit(self: XMLDoc) void {
+        _ = self;
     }
 };
 
-const Counter = struct {
-    val: []const u8,
-    count: usize,
-    pub fn increment(self: *Counter, count: usize, colour: usize) void {
-        _ = colour;
-        self.count += count;
-    }
-};
-
-const TextIter = struct {
+const Token = union(enum) {
+    const TagDef = struct { name: []const u8, args: ?[]const u8 };
+    start_tag: TagDef,
+    end_tag: []const u8,
+    empty_tag: TagDef,
+    version_tag: []const u8,
     text: []const u8,
-    curPos: usize = 0,
-    pub fn until(self: *TextIter, item: []const u8) ?[]const u8 {
-        const point = std.mem.indexOf(u8, self.text[self.curPos..], item) orelse {
-            return null;
-        };
-        defer self.curPos += point;
-        if (point == 0) return null;
-        return self.text[self.curPos..][0..point];
-    }
-    pub fn peekNext(self: TextIter) ?u8 {
-        if (self.curPos >= self.text.len) return null;
-        return self.text[self.curPos];
+    cdata: []const u8,
+    comment: []const u8,
+    pub fn format(self: Token, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .start_tag => |s| try writer.print("Start[{s}|{s}]", .{ s.name, s.args orelse "(null)" }),
+            .end_tag => |e| try writer.print("End[{s}]", .{e}),
+            .empty_tag => |s| try writer.print("Empty[{s}|{s}]", .{ s.name, s.args orelse "(null)" }),
+            .version_tag => |v| try writer.print("Version[{s}]", .{v}),
+            .text => |t| try writer.print("Text[{s}]", .{t}),
+            .cdata => |t| try writer.print("cdata[{s}]", .{t}),
+            .comment => |t| try writer.print("Comment[{s}]", .{t}),
+        }
     }
 };
 
-pub fn ParseXML(
-    alloc: std.mem.Allocator,
-    val: []const u8,
-) !*XMLNode {
-    var iter = TextIter{ .text = val };
-    var idx = Counter{
-        .val = val,
-        .count = 0,
-    };
-    var rootNode = try alloc.create(XMLNode);
+fn startsWith(data: []const u8, starting_msg: []const u8) bool {
+    if (starting_msg.len > data.len) return false;
+    return std.mem.eql(u8, data[0..starting_msg.len], starting_msg);
+}
 
-    rootNode.* = XMLNode{
-        .alloc = alloc,
-        .parent = null,
-        .name = "root",
-        .tags = std.array_list.Managed(xmlTag).init(alloc),
-        .contents = std.array_list.Managed(XMLContents).init(alloc),
-    };
-    errdefer rootNode.deinit();
-    var curNode: *XMLNode = rootNode;
-
-    var tags = std.array_list.Managed(xmlTag).init(alloc);
-    while (true) {
-        const point = iter.until("<");
-
-        if (point) |p| {
-            try curNode.contents.append(.{
-                .str = p,
-            });
-        }
-        switch (iter.peekNext() orelse return error.UnexpectedEOF) {
-            '?' => { //version
-                _ = iter.until("?>") orelse return error.UnFinished;
-            },
-            '!' => {
-                _ = iter.until("-->") orelse return error.UnFinished;
-            },
-            '/' => {
-                const name = iter.until(">") orelse return error.UnFinished;
-                _ = name; //TODO
-                if (curNode.parent) |c| {
-                    curNode = c;
+const TokenIter = struct {
+    data: []const u8,
+    idx: usize = 0,
+    pub fn next(self: *TokenIter) !?Token {
+        if (self.idx >= self.data.len) return null;
+        if (self.data[self.idx] == '<') {
+            if (startsWith(self.data[self.idx..], commentOpen)) {
+                self.idx += commentOpen.len;
+                if (std.mem.findPos(u8, self.data, self.idx, commentClose)) |end| {
+                    defer self.idx = end + commentClose.len;
+                    return .{ .comment = self.data[self.idx..end] };
                 } else {
-                    return rootNode;
+                    return error.InvalidToken;
                 }
-            },
-            else => {
-                const end = std.mem.indexOf(u8, val[idx.count..], ">") orelse return error.UnFinished;
-                const starting_tag = val[idx.count + 1 .. idx.count + 1 + end];
-                idx.increment(end + 2, 4);
-                //std.debug.print("starting_tag=>[{s}]\n", .{starting_tag});
-                const end_name = std.mem.indexOfAny(u8, starting_tag, std.ascii.whitespace[0..]);
-                const name = if (end_name) |e| starting_tag[0..e] else starting_tag;
-                tags.clearRetainingCapacity();
-                if (end_name) |e| {
-                    const tag_area = std.mem.trim(
-                        u8,
-                        starting_tag[e..],
-                        std.ascii.whitespace ++ "/>",
-                    );
-
-                    var tag_idx: usize = 0;
-                    while (tag_idx < tag_area.len) {
-                        const eql_pos = std.mem.indexOf(u8, tag_area[tag_idx..], "=") orelse return error.InvalidTag;
-                        const name_tag = std.mem.trim(u8, tag_area[tag_idx .. tag_idx + eql_pos], std.ascii.whitespace[0..]);
-                        const end_pos = std.mem.indexOf(u8, tag_area[tag_idx + eql_pos + 2 ..], "\"") orelse return error.InvalidTag;
-                        const value_tag = tag_area[(tag_idx + eql_pos + 2)..(tag_idx + eql_pos + 2 + end_pos)];
-                        try tags.append(.{
-                            .name = name_tag,
-                            .val = value_tag,
-                        });
-                        tag_idx += eql_pos + 2 + end_pos + 1;
+            } else if (startsWith(self.data[self.idx..], cdataOpen)) {
+                self.idx += cdataOpen.len;
+                if (std.mem.findPos(u8, self.data, self.idx, cdataClose)) |end| {
+                    defer self.idx = end + cdataClose.len;
+                    return .{ .cdata = self.data[self.idx..end] };
+                } else {
+                    return error.InvalidToken;
+                }
+            } else if (startsWith(self.data[self.idx..], xmlOpenToken)) {
+                self.idx += xmlOpenToken.len;
+                if (std.mem.findPos(u8, self.data, self.idx, xmlCloseToken)) |end| {
+                    defer self.idx = end + xmlCloseToken.len;
+                    return .{ .version_tag = self.data[self.idx..end] };
+                } else {
+                    return error.InvalidToken;
+                }
+            } else if (startsWith(self.data[self.idx..], openCloseTag)) {
+                self.idx += openCloseTag.len;
+                if (std.mem.findPos(u8, self.data, self.idx, ">")) |end| {
+                    defer self.idx = end + 1;
+                    return .{ .end_tag = self.data[self.idx..end] };
+                } else {
+                    return error.InvalidToken;
+                }
+            } else {
+                if (std.mem.findPos(u8, self.data, self.idx, ">")) |pos| {
+                    defer self.idx = pos + 1;
+                    const is_empty_tag = self.data[pos - 1] == '/';
+                    const total = if (is_empty_tag) self.data[self.idx + 1 .. pos - 1] else self.data[self.idx + 1 .. pos];
+                    const tag_def: Token.TagDef = if (std.mem.find(u8, total, " ")) |split| .{
+                        .name = total[0..split],
+                        .args = total[split..],
+                    } else .{
+                        .name = total,
+                        .args = null,
+                    };
+                    if (is_empty_tag) {
+                        return .{ .empty_tag = tag_def };
+                    } else {
+                        return .{ .start_tag = tag_def };
                     }
-                }
-                //var end_count: usize = 0;
-                //while (end_count < 6) : (end_count += 1) {
-                //std.debug.print("|[{}={c}||\n", .{ @intCast(isize, end_count) - 3, val[idx.count + end_count - 3] });
-                //}
-                if (val[idx.count - 3] == '/') {
-                    const newNode = try alloc.create(XMLNode);
-                    newNode.* = XMLNode{
-                        .alloc = alloc,
-                        .parent = curNode,
-                        .name = name,
-                        .tags = try tags.clone(),
-                        .contents = std.array_list.Managed(XMLContents).init(alloc),
-                    };
-                    try curNode.contents.append(.{
-                        .node = newNode,
-                    });
                 } else {
-                    const newNode = try alloc.create(XMLNode);
-
-                    newNode.* = XMLNode{
-                        .alloc = alloc,
-                        .parent = curNode,
-                        .name = name,
-                        .tags = try tags.clone(),
-                        .contents = std.array_list.Managed(XMLContents).init(alloc),
-                    };
-                    try curNode.contents.append(.{
-                        .node = newNode,
-                    });
-                    curNode = newNode;
+                    return error.UnexpectedEnd;
                 }
-            },
+            }
+        } else {
+            if (std.mem.findPos(u8, self.data, self.idx, "<")) |pos| {
+                defer self.idx = pos;
+                return .{ .text = self.data[self.idx..pos] };
+                //
+            } else {
+                defer self.idx = self.data.len;
+                return .{ .text = self.data[self.idx..] };
+            }
+        }
+    }
+};
+
+pub fn parseXML(alloc: std.mem.Allocator, data: []const u8) !XMLDoc {
+    var elements = std.ArrayList(XMLDoc.Element){};
+    defer elements.deinit(alloc);
+    const version: ?Version = null;
+    const encoding: ?Encoding = null;
+
+    var iter = TokenIter{ .data = data };
+    var count: usize = 0;
+    while (try iter.next()) |token| {
+        defer count += 1;
+        if (count > 100) break;
+        std.log.err("{f}", .{token});
+        switch (token) {
+            .start_tag => {}, // TagDef,
+            .end_tag => {}, // []const u8,
+            .empty_tag => {}, // TagDef,
+            .version_tag => {}, // []const u8,
+            .text => {}, // []const u8,
+            .cdata => {}, // []const u8,
+            .comment => {}, // []const u8,
         }
     }
 
-    return rootNode;
+    return .{
+        .version = version,
+        .encoding = encoding,
+        .alloc = alloc,
+        .elements = try elements.toOwnedSlice(alloc),
+    };
 }
 
 test {
     const name = "/usr/share/wayland/wayland.xml";
     const alloc = std.testing.allocator;
     const file = try std.fs.cwd().readFileAlloc(name, alloc, .unlimited);
-    std.log.err("{s}", .{file});
+    //std.log.err("{s}", .{file});
     defer alloc.free(file);
 
-    const doc = try ParseXML(alloc, file);
+    const doc = try parseXML(alloc, file);
     defer doc.deinit();
 }
