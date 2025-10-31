@@ -13,7 +13,10 @@ const openCloseTag = "</";
 
 pub const Version = enum { v1_0, v1_1 };
 pub const Encoding = enum { utf8 };
-
+pub const Attribute = struct {
+    name: []const u8,
+    value: []const u8,
+};
 pub const XMLDoc = struct {
     version: ?Version,
     encoding: ?Encoding,
@@ -22,7 +25,6 @@ pub const XMLDoc = struct {
     pub const ElementIdx = u32;
     pub const Element = union(enum) {
         sub: struct {
-            parent: ?ElementIdx,
             sub_elements: []const ElementIdx,
             attrs: []const Attribute,
         },
@@ -32,6 +34,63 @@ pub const XMLDoc = struct {
         _ = self;
     }
 };
+
+const XMLBuilder = struct {
+    alloc:std.mem.Allocator,
+    pub fn init(alloc:std.mem.Allocator) XMLBuilder {
+        return .{
+            .alloc = alloc,
+        };
+    }
+    pub fn deinit(self:*XMLBuilder) void {
+        _ = self;
+    }
+};
+
+pub fn parseXML(alloc: std.mem.Allocator, data: []const u8) !XMLDoc {
+    var elements = std.ArrayList(XMLDoc.Element){};
+    defer elements.deinit(alloc);
+    const version: ?Version = null;
+    const encoding: ?Encoding = null;
+    var builder = XMLBuilder.init(alloc);
+    defer builder.deinit();
+    var iter = TokenIter{ .data = data };
+    var count: usize = 0;
+    while (try iter.next()) |token| {
+        defer count += 1;
+        if (count > 100) break;
+        std.log.err("{f}", .{token});
+        switch (token) {
+            .start_tag => {
+                const new_id = try 
+            }, // TagDef,
+            .end_tag => {}, // []const u8,
+            .empty_tag => {}, // TagDef,
+            .version_tag => {}, // []const u8,
+            .text => {}, // []const u8,
+            .cdata => {}, // []const u8,
+            .comment => {}, // []const u8,
+        }
+    }
+
+    return .{
+        .version = version,
+        .encoding = encoding,
+        .alloc = alloc,
+        .elements = try elements.toOwnedSlice(alloc),
+    };
+}
+
+test {
+    const name = "/usr/share/wayland/wayland.xml";
+    const alloc = std.testing.allocator;
+    const file = try std.fs.cwd().readFileAlloc(name, alloc, .unlimited);
+    //std.log.err("{s}", .{file});
+    defer alloc.free(file);
+
+    const doc = try parseXML(alloc, file);
+    defer doc.deinit();
+}
 
 const Token = union(enum) {
     const TagDef = struct { name: []const u8, args: ?[]const u8 };
@@ -131,45 +190,3 @@ const TokenIter = struct {
         }
     }
 };
-
-pub fn parseXML(alloc: std.mem.Allocator, data: []const u8) !XMLDoc {
-    var elements = std.ArrayList(XMLDoc.Element){};
-    defer elements.deinit(alloc);
-    const version: ?Version = null;
-    const encoding: ?Encoding = null;
-
-    var iter = TokenIter{ .data = data };
-    var count: usize = 0;
-    while (try iter.next()) |token| {
-        defer count += 1;
-        if (count > 100) break;
-        std.log.err("{f}", .{token});
-        switch (token) {
-            .start_tag => {}, // TagDef,
-            .end_tag => {}, // []const u8,
-            .empty_tag => {}, // TagDef,
-            .version_tag => {}, // []const u8,
-            .text => {}, // []const u8,
-            .cdata => {}, // []const u8,
-            .comment => {}, // []const u8,
-        }
-    }
-
-    return .{
-        .version = version,
-        .encoding = encoding,
-        .alloc = alloc,
-        .elements = try elements.toOwnedSlice(alloc),
-    };
-}
-
-test {
-    const name = "/usr/share/wayland/wayland.xml";
-    const alloc = std.testing.allocator;
-    const file = try std.fs.cwd().readFileAlloc(name, alloc, .unlimited);
-    //std.log.err("{s}", .{file});
-    defer alloc.free(file);
-
-    const doc = try parseXML(alloc, file);
-    defer doc.deinit();
-}
