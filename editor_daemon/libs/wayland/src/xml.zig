@@ -17,6 +17,27 @@ pub const Attribute = struct {
     name: []const u8,
     value: []const u8,
 };
+
+const arg_iter = struct {
+    data: []const u8,
+    idx: usize = 0,
+    pub fn next(self: *arg_iter) !?Attribute {
+        errdefer std.log.err("Value `{s}`|`{s}`", .{ self.data, self.data[self.idx..] });
+        if (self.idx >= self.data.len) return null;
+        const start = self.idx;
+        const mid = std.mem.findPos(u8, self.data, self.idx, "=") orelse return error.Invalid;
+        const name = self.data[start..mid];
+
+        self.idx = mid + 2;
+        const value_pos = std.mem.findPos(u8, self.data, self.idx, "\"") orelse return error.Invalid;
+        defer self.idx = value_pos + 1;
+        return .{
+            .name = std.mem.trim(u8, name, &std.ascii.whitespace),
+            .value = self.data[mid + 2 .. value_pos],
+        };
+    }
+};
+
 pub const XMLDoc = struct {
     version: ?Version,
     encoding: ?Encoding,
@@ -24,26 +45,110 @@ pub const XMLDoc = struct {
     elements: []Element,
     pub const ElementIdx = u32;
     pub const Element = union(enum) {
-        sub: struct {
-            sub_elements: []const ElementIdx,
-            attrs: []const Attribute,
-        },
+        sub: SubElem,
         text: []const u8,
     };
+    pub const SubElem = struct {
+        name: []const u8,
+        sub_elements: std.ArrayList(u32),
+        attrs: []const Attribute,
+        parent: ?u32,
+    };
     pub fn deinit(self: XMLDoc) void {
-        _ = self;
+        for (self.elements) |*e| {
+            switch (e.*) {
+                .sub => |*s| {
+                    self.alloc.free(s.attrs);
+                    s.sub_elements.deinit(self.alloc);
+                },
+                else => {},
+            }
+        }
+        self.alloc.free(self.elements);
     }
 };
 
 const XMLBuilder = struct {
-    alloc:std.mem.Allocator,
-    pub fn init(alloc:std.mem.Allocator) XMLBuilder {
+    alloc: std.mem.Allocator,
+    elements: std.ArrayList(XMLDoc.Element),
+    arg_builder: std.ArrayList(Attribute),
+    cur_node: u32 = 0,
+    pub fn init(alloc: std.mem.Allocator) !XMLBuilder {
+        var elems = std.ArrayList(XMLDoc.Element){};
+        errdefer elems.deinit(alloc);
+        try elems.append(alloc, .{
+            .sub = .{
+                .name = "root",
+                .sub_elements = .{},
+                .attrs = &.{},
+                .parent = null,
+            },
+        });
         return .{
             .alloc = alloc,
+            .elements = elems,
+            .arg_builder = .{},
         };
     }
-    pub fn deinit(self:*XMLBuilder) void {
-        _ = self;
+    pub fn deinit(self: *XMLBuilder) void {
+        self.arg_builder.deinit(self.alloc);
+        for (self.elements.items) |*e| {
+            switch (e.*) {
+                .sub => |*s| {
+                    self.alloc.free(s.attrs);
+                    s.sub_elements.deinit(self.alloc);
+                },
+                else => {},
+            }
+        }
+        self.elements.deinit(self.alloc);
+    }
+
+    pub fn tag(self: *XMLBuilder, opt: enum { push, empty }, val: Token.TagDef) !void {
+        if (val.args) |arg| {
+            self.arg_builder.clearRetainingCapacity();
+            var iter = arg_iter{ .data = std.mem.trim(u8, arg, &std.ascii.whitespace) };
+            while (try iter.next()) |n| {
+                try self.arg_builder.append(self.alloc, n);
+            }
+        }
+
+        const node_id: u32 = @intCast(self.elements.items.len);
+        try self.elements.append(
+            self.alloc,
+            .{ .sub = .{
+                .name = val.name,
+                .sub_elements = .{},
+                .attrs = try self.alloc.dupe(Attribute, self.arg_builder.items),
+                .parent = self.cur_node,
+            } },
+        );
+        try self.elements.items[self.cur_node].sub.sub_elements.append(self.alloc, node_id);
+        if (opt == .push) self.cur_node = node_id;
+    }
+    pub fn push_text(self: *XMLBuilder, text: []const u8) !void {
+        const node_id: u32 = @intCast(self.elements.items.len);
+        try self.elements.append(
+            self.alloc,
+            .{ .text = text },
+        );
+        try self.elements.items[self.cur_node].sub.sub_elements.append(self.alloc, node_id);
+    }
+    pub fn pop_tag(self: *XMLBuilder, name: []const u8) !void {
+        switch (self.elements.items[self.cur_node]) {
+            .sub => |sub| {
+                if (std.mem.eql(u8, sub.name, name) == false) {
+                    std.log.err("{s} != {s}", .{ sub.name, name });
+                    return error.MisMatchTag;
+                }
+                if (sub.parent) |p| {
+                    self.cur_node = p;
+                } else {
+                    return error.Mismatch;
+                }
+            },
+            else => return error.InvalidState,
+        }
     }
 };
 
@@ -52,23 +157,31 @@ pub fn parseXML(alloc: std.mem.Allocator, data: []const u8) !XMLDoc {
     defer elements.deinit(alloc);
     const version: ?Version = null;
     const encoding: ?Encoding = null;
-    var builder = XMLBuilder.init(alloc);
+    var builder = try XMLBuilder.init(alloc);
     defer builder.deinit();
     var iter = TokenIter{ .data = data };
     var count: usize = 0;
     while (try iter.next()) |token| {
         defer count += 1;
-        if (count > 100) break;
-        std.log.err("{f}", .{token});
+
+        std.log.info("{f}", .{token});
         switch (token) {
-            .start_tag => {
-                const new_id = try 
+            .start_tag => |st| {
+                try builder.tag(.push, st);
+            },
+            .end_tag => |name| {
+                try builder.pop_tag(name);
+            }, // []const u8,
+            .empty_tag => |et| {
+                try builder.tag(.empty, et);
             }, // TagDef,
-            .end_tag => {}, // []const u8,
-            .empty_tag => {}, // TagDef,
             .version_tag => {}, // []const u8,
-            .text => {}, // []const u8,
-            .cdata => {}, // []const u8,
+            .text => |t| {
+                try builder.push_text(t);
+            }, // []const u8,
+            .cdata => |t| {
+                try builder.push_text(t);
+            }, // []const u8,
             .comment => {}, // []const u8,
         }
     }
@@ -77,7 +190,7 @@ pub fn parseXML(alloc: std.mem.Allocator, data: []const u8) !XMLDoc {
         .version = version,
         .encoding = encoding,
         .alloc = alloc,
-        .elements = try elements.toOwnedSlice(alloc),
+        .elements = try builder.elements.toOwnedSlice(alloc),
     };
 }
 
