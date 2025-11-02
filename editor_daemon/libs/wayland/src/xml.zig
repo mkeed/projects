@@ -66,6 +66,25 @@ pub const XMLDoc = struct {
         }
         self.alloc.free(self.elements);
     }
+    pub fn search(self: XMLDoc, id: u32, names: []const []const u8) void {
+        if (names.len == 0) return;
+        switch (self.elements[id]) {
+            .text => {},
+            .sub => |sub_elem| {
+                for (sub_elem.sub_elements.items) |s| {
+                    switch (self.elements[s]) {
+                        .text => {},
+                        .sub => |sub| {
+                            if (std.mem.eql(u8, sub.name, names[0])) {
+                                std.log.err("Name:[{s}]", .{sub.name});
+                                self.search(s, names[1..]);
+                            }
+                        },
+                    }
+                }
+            },
+        }
+    }
 };
 
 const XMLBuilder = struct {
@@ -203,6 +222,8 @@ test {
 
     const doc = try parseXML(alloc, file);
     defer doc.deinit();
+
+    doc.search(0, &.{ "protocol", "interface" });
 }
 
 const Token = union(enum) {
