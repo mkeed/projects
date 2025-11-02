@@ -66,7 +66,7 @@ pub const XMLDoc = struct {
         }
         self.alloc.free(self.elements);
     }
-    pub fn search(self: XMLDoc, id: u32, names: []const []const u8) void {
+    pub fn search(self: XMLDoc, id: u32, names: []const []const u8, elements: *std.array_list.Managed(*Element)) !void {
         if (names.len == 0) return;
         switch (self.elements[id]) {
             .text => {},
@@ -76,8 +76,12 @@ pub const XMLDoc = struct {
                         .text => {},
                         .sub => |sub| {
                             if (std.mem.eql(u8, sub.name, names[0])) {
-                                std.log.err("Name:[{s}]", .{sub.name});
-                                self.search(s, names[1..]);
+                                if (names.len == 1) {
+                                    try elements.append(&self.elements[id]);
+                                } else {
+                                    std.log.err("Name:[{s}]", .{sub.name});
+                                    try self.search(s, names[1..], elements);
+                                }
                             }
                         },
                     }
@@ -222,8 +226,15 @@ test {
 
     const doc = try parseXML(alloc, file);
     defer doc.deinit();
-
-    doc.search(0, &.{ "protocol", "interface" });
+    var list = std.array_list.Managed(*XMLDoc.Element).init(alloc);
+    defer list.deinit();
+    try doc.search(0, &.{ "protocol", "interface" }, &list);
+    for (list.items) |i| {
+        switch (i.*) {
+            .sub => |s| std.log.err("[{s}]", .{s.name}),
+            else => {},
+        }
+    }
 }
 
 const Token = union(enum) {
